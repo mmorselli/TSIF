@@ -2,7 +2,7 @@
   "server_number": "6468",
   "event_screen_enabled": true,
   "language_file": "lang.json",
-  "log_file_enabled": true,
+  "log_file_enabled": false,
   "window_title_contains": "Ark: Survival Ascended",
   "process_name": "ArkAscended",
   "active_poll_interval_seconds": 0.2,
