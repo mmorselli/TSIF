@@ -24,11 +24,13 @@ from arklogin import (
     START_PROFILE,
     ScreenReader,
     load_config,
+    load_language,
     reference_frame,
 )
 
 
 ROOT = Path(__file__).resolve().parents[1]
+TEST_LANGUAGE = load_language(ROOT / "lang.json.example")
 
 
 class FakeClock:
@@ -62,7 +64,7 @@ class FakeWindowManager:
 def make_bot(clock=None):
     clock = clock or FakeClock()
     bot = ArkLoginBot.__new__(ArkLoginBot)
-    bot.config = load_config(ROOT / "config.json")
+    bot.config = load_config(ROOT / "config.json.example")
     bot.logger = logging.getLogger(f"arklogin.test.{id(bot)}")
     bot.logger.addHandler(logging.NullHandler())
     bot.dry_run = True
@@ -357,7 +359,7 @@ class SuccessDetectionTests(unittest.TestCase):
 class OCRProfileTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.reader = ScreenReader(0.45, "6468")
+        cls.reader = ScreenReader(0.45, "6468", TEST_LANGUAGE)
 
     def test_profile_mask_keeps_canvas_and_does_not_modify_input(self):
         frame = np.full((1200, 1920, 3), 255, dtype=np.uint8)
