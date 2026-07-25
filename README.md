@@ -5,20 +5,30 @@ interacting exclusively with the `ArkAscended` process window.
 
 ## Running
 
-1. Open `config.json` and check `server_number` and
+1. Run or double-click `setup_arklogin.bat` once. It creates the local
+   configuration files, prepares the `venv`, installs the required libraries,
+   and starts the application.
+2. Open `config.json` and check `server_number` and
    `event_screen_enabled`. The target server must be in the first list row. If
    it is not there, the application treats it as unavailable and does not
    click.
-2. Start ARK in windowed mode and navigate to any screen described in the
+3. Start ARK in windowed mode and navigate to any screen described in the
    specifications.
-3. Run or double-click `arklogin.bat`. This launcher always uses the Python
+4. Run or double-click `arklogin.bat`. This launcher always uses the Python
    interpreter from `venv`.
-4. To stop the application, press `Ctrl+C` in its console window or close it.
+5. To stop the application, press `Ctrl+C` in its console window or close it.
 
-If the environment is not ready yet, run `setup_arklogin.bat` once. It creates
-the `venv`, when necessary, and automatically installs the required libraries.
+During setup, `config.json` is copied from `config.json.example` and
+`lang.json` from `lang.json.example` only when the destination file does not
+already exist. Running setup again updates dependencies but never overwrites
+either local file.
 
 ## Configuration
+
+`config.json` and `lang.json` contain user-specific settings and are excluded
+from Git. Their version-controlled `.example` files provide defaults for new
+installations. After updating the application, compare existing local files
+with the corresponding examples and manually add any newly introduced entries.
 
 - `server_number`: unique server number. The current configuration uses
   `6468`, matching the reference screenshots.
@@ -61,9 +71,10 @@ are used only as fallbacks when the button text cannot be located.
 ## Language customization
 
 All text searched on the game screen is defined in `lang.json`. Each entry is
-a list of accepted OCR aliases. To support another game language, copy the
-file, translate every value while preserving the keys, and set
-`language_file` in `config.json` to the new filename.
+a list of accepted OCR aliases. To support another game language, edit the
+local file and translate every value while preserving the keys. Alternatively,
+copy `lang.json.example` to another filename, translate it, and set
+`language_file` in `config.json` to that filename.
 
 Multiple aliases can be retained when a label has alternative translations or
 OCR frequently returns a predictable variant:
@@ -74,9 +85,10 @@ OCR frequently returns a predictable variant:
 }
 ```
 
-The actual language file must contain all entries found in the supplied
-`lang.json`; startup stops with a clear error if an entry is missing or empty.
-Files are read as UTF-8, and matching supports Unicode letters and digits.
+The actual language file must contain all entries found in
+`lang.json.example`; startup stops with a clear error if an entry is missing
+or empty. Files are read as UTF-8, and matching supports Unicode letters and
+digits.
 
 ## Performance optimizations
 

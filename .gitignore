@@ -3,3 +3,5 @@ __pycache__/
 arklogin.log*
 live_before.png
 venv/
+/config.json
+/lang.json
