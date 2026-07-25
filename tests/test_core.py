@@ -6,6 +6,8 @@ from pathlib import Path
 
 from arklogin import (
     ArkLoginBot,
+    AttemptTracker,
+    ClickResult,
     GameWindow,
     OCRDetection,
     Recognition,
@@ -41,6 +43,14 @@ class TextRecognitionTests(unittest.TestCase):
         )
         self.assertEqual(result.state, "server_list")
         self.assertTrue(result.target_server_found)
+
+    def test_server_number_does_not_match_longer_numeric_id(self):
+        for wrong_id in ("16448", "64480"):
+            with self.subTest(wrong_id=wrong_id):
+                result = self.reader.classify_text(
+                    ["MULTIPLAYER SERVERS: 1", f"EU-PVE-GenOne{wrong_id}", "JOIN"]
+                )
+                self.assertFalse(result.target_server_found)
 
     def test_connecting_does_not_look_like_list_ready(self):
         result = self.reader.classify_text(
@@ -123,12 +133,15 @@ class FlowTests(unittest.TestCase):
             "post_cancel_wait_seconds": 2,
         }
         bot.logger = logging.getLogger("arklogin.flow-test")
-        bot.pending_back = False
-        bot.cancel_time = 0.0
+        bot.now = lambda: 0.0
+        bot.attempt = AttemptTracker()
+        bot.back_recovery = None
         bot.last_state = None
         actions = []
-        bot.click = lambda _window, _bounds, name, _description, _detected=None: (
-            actions.append(name) or True
+        bot.perform_action = (
+            lambda _recognition, _window, _bounds, name, _description: (
+                actions.append(name) or ClickResult.SENT
+            )
         )
         bot.notice = lambda *_args, **_kwargs: None
 
