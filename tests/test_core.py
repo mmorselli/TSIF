@@ -2,6 +2,7 @@ import json
 import logging
 import tempfile
 import unittest
+from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
 from arklogin import (
@@ -14,10 +15,14 @@ from arklogin import (
     Recognition,
     ScreenReader,
     canonical,
+    configure_logging,
     load_config,
     load_language,
     relative_click_point,
 )
+
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
 def make_reader(server_number="6448"):
@@ -149,6 +154,35 @@ class ConfigTests(unittest.TestCase):
             path.write_text(json.dumps({"join": ["JOIN"]}), encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "Missing language entries"):
                 load_language(path)
+
+    def test_log_file_enabled_is_optional_and_must_be_boolean(self):
+        config = json.loads((ROOT / "config.json").read_text(encoding="utf-8"))
+        config.pop("log_file_enabled")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps(config), encoding="utf-8")
+            self.assertTrue(load_config(path)["log_file_enabled"])
+
+            config["log_file_enabled"] = "false"
+            path.write_text(json.dumps(config), encoding="utf-8")
+            with self.assertRaisesRegex(
+                ValueError, "log_file_enabled must be true or false"
+            ):
+                load_config(path)
+
+    def test_file_logging_can_be_disabled(self):
+        logger = configure_logging(file_enabled=False)
+        try:
+            self.assertFalse(
+                any(
+                    isinstance(handler, RotatingFileHandler)
+                    for handler in logger.handlers
+                )
+            )
+        finally:
+            for handler in logger.handlers[:]:
+                logger.removeHandler(handler)
+                handler.close()
 
 
 class CoordinateTests(unittest.TestCase):

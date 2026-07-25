@@ -27,6 +27,9 @@ the `venv`, when necessary, and automatically installs the required libraries.
 - `language_file`: path to the JSON file containing every button label and
   screen marker used by OCR. Relative paths are resolved from the application
   directory.
+- `log_file_enabled`: when `true`, writes diagnostic messages to the rotating
+  `arklogin.log` file. Set it to `false` to disable file logging while keeping
+  console messages available.
 - `active_poll_interval_seconds`: interval between checks while ARK is in the
   foreground. The `0.2`-second default keeps attempts responsive.
 - `foreground_reacquire_interval_seconds`: waits 5 seconds before bringing ARK
@@ -163,7 +166,8 @@ The application:
   detecting `CONNECTION FAILED` and pressing `CANCEL` once;
 - after `connecting`, pauses clicks and avoids reclaiming focus for the
   configured duration when the login UI disappears consistently;
-- writes diagnostic details to `arklogin.log`.
+- writes diagnostic details to `arklogin.log` when `log_file_enabled` is
+  enabled.
 
 To observe the application without sending clicks:
 
