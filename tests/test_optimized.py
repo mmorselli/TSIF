@@ -12,6 +12,7 @@ from arklogin import (
     BACK_PROFILE,
     BackRecovery,
     ClickResult,
+    DLC_PROFILE,
     EVENT_PROFILE,
     GameWindow,
     HOME_PROFILE,
@@ -192,6 +193,43 @@ class InputTimingTests(unittest.TestCase):
             [arklogin.win32con.MOUSEEVENTF_LEFTDOWN, arklogin.win32con.MOUSEEVENTF_LEFTUP],
         )
         self.assertEqual(cursor_positions[-1], (12, 34))
+
+    def test_click_target_is_reasserted_before_press_and_release(self):
+        bot = make_bot()
+        bot.dry_run = False
+        cursor_positions = []
+        mouse_events = []
+        target = (461, 795)
+
+        with (
+            patch("arklogin.win32gui.GetForegroundWindow", return_value=1),
+            patch("arklogin.win32api.GetCursorPos", return_value=(12, 34)),
+            patch(
+                "arklogin.win32api.SetCursorPos",
+                side_effect=lambda value: cursor_positions.append(value),
+            ),
+            patch(
+                "arklogin.win32api.mouse_event",
+                side_effect=lambda event, *_args: mouse_events.append(event),
+            ),
+        ):
+            result = bot.click(
+                bot.window_manager.window,
+                bot.window_manager.bounds,
+                "join_game",
+                "JOIN GAME",
+                (0.24, 0.69),
+            )
+
+        self.assertIs(result, ClickResult.SENT)
+        self.assertEqual(cursor_positions, [target, target, target, (12, 34)])
+        self.assertEqual(
+            mouse_events,
+            [
+                arklogin.win32con.MOUSEEVENTF_LEFTDOWN,
+                arklogin.win32con.MOUSEEVENTF_LEFTUP,
+            ],
+        )
 
 
 class SchedulerTests(unittest.TestCase):
@@ -446,6 +484,13 @@ class OCRProfileTests(unittest.TestCase):
                 "accept_network_failure",
                 False,
             ),
+            (
+                "07_dlc_owned.png",
+                DLC_PROFILE,
+                "dlc_packs",
+                "back_dlc",
+                False,
+            ),
         )
         for filename, profile, state, anchor, target in cases:
             with self.subTest(filename=filename, profile=profile.name):
@@ -456,12 +501,38 @@ class OCRProfileTests(unittest.TestCase):
                 self.assertIn(anchor, result.anchors)
                 self.assertEqual(result.target_server_found, target)
 
-    def test_server_and_event_profiles_survive_small_window_resize(self):
+    def test_key_profiles_survive_small_window_resize(self):
         cases = (
-            ("02_join-server.png", SERVER_PROFILE, "server_list", "join_server"),
-            ("03_optional_event.png", EVENT_PROFILE, "event", "join_event"),
+            (
+                "01_first_screen.png",
+                HOME_PROFILE,
+                "home",
+                "join_game",
+                False,
+            ),
+            (
+                "02_join-server.png",
+                SERVER_PROFILE,
+                "server_list",
+                "join_server",
+                True,
+            ),
+            (
+                "03_optional_event.png",
+                EVENT_PROFILE,
+                "event",
+                "join_event",
+                True,
+            ),
+            (
+                "07_dlc_owned.png",
+                DLC_PROFILE,
+                "dlc_packs",
+                "back_dlc",
+                False,
+            ),
         )
-        for filename, profile, expected_state, anchor in cases:
+        for filename, profile, expected_state, anchor, target in cases:
             frame = reference_frame(ROOT / "docs" / filename)
             height = round(frame.shape[0] * 800 / frame.shape[1])
             resized = arklogin.cv2.resize(
@@ -472,7 +543,7 @@ class OCRProfileTests(unittest.TestCase):
             with self.subTest(filename=filename, width=800):
                 result = self.reader.recognize(resized, profile)
                 self.assertEqual(result.state, expected_state)
-                self.assertTrue(result.target_server_found)
+                self.assertEqual(result.target_server_found, target)
                 self.assertIn(anchor, result.anchors)
 
     def test_modal_guard_has_priority_over_underlying_server_screen(self):

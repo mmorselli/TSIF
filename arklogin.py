@@ -40,6 +40,7 @@ LANGUAGE_KEYS = frozenset(
         "back",
         "cancel",
         "connection_failed",
+        "dlc_screen",
         "event_markers",
         "join",
         "join_game",
@@ -258,6 +259,7 @@ def load_config(path: Path) -> dict[str, Any]:
     # Keep configuration files from earlier releases compatible with the
     # JOINING FAILED dialog introduced later.
     positions.setdefault("dismiss_joining_failed", [0.5, 0.63])
+    positions.setdefault("back_dlc", [0.5, 0.885])
 
     expected_positions = {
         "start",
@@ -266,6 +268,7 @@ def load_config(path: Path) -> dict[str, Any]:
         "join_event",
         "cancel",
         "back",
+        "back_dlc",
         "accept_network_failure",
         "dismiss_joining_failed",
     }
@@ -319,6 +322,16 @@ class NormalizedRect:
     bottom: float
 
 
+def point_in_rect(
+    point: tuple[float, float], rectangle: NormalizedRect
+) -> bool:
+    x, y = point
+    return (
+        rectangle.left <= x <= rectangle.right
+        and rectangle.top <= y <= rectangle.bottom
+    )
+
+
 @dataclass(frozen=True)
 class OCRProfile:
     name: str
@@ -362,6 +375,8 @@ EVENT_HEADER = NormalizedRect(0.04, 0.12, 0.58, 0.29)
 POPUP_TITLE = NormalizedRect(0.40, 0.33, 0.60, 0.41)
 CONNECTING_TEXT = NormalizedRect(0.25, 0.38, 0.75, 0.59)
 HOME_JOIN = NormalizedRect(0.10, 0.61, 0.40, 0.79)
+DLC_HEADER = NormalizedRect(0.38, 0.16, 0.62, 0.29)
+DLC_BACK = NormalizedRect(0.40, 0.82, 0.60, 0.94)
 JOINING_FAILED_ACTION = NormalizedRect(0.40, 0.58, 0.60, 0.68)
 POPUP_ACTIONS = NormalizedRect(0.39, 0.695, 0.61, 0.73)
 START_ACTIONS = NormalizedRect(0.32, 0.68, 0.68, 0.95)
@@ -379,6 +394,11 @@ HOME_PROFILE = OCRProfile(
     "home",
     MODAL_GUARD + (HOME_JOIN,),
     frozenset({"home", "network_failure", "connection_failed"}),
+)
+DLC_PROFILE = OCRProfile(
+    "dlc",
+    (DLC_HEADER, DLC_BACK),
+    frozenset({"dlc_packs"}),
 )
 SERVER_PROFILE = OCRProfile(
     "server",
@@ -424,6 +444,7 @@ JOINING_FAILED_PROFILE = OCRProfile(
 PROFILES_BY_STATE: dict[str, tuple[OCRProfile, ...]] = {
     "start": (START_PROFILE, HOME_PROFILE),
     "home": (HOME_PROFILE, SERVER_PROFILE),
+    "dlc_packs": (DLC_PROFILE, HOME_PROFILE),
     "server_list": (SERVER_PROFILE, EVENT_PROFILE, OUTCOME_PROFILE),
     "event": (EVENT_PROFILE, OUTCOME_PROFILE),
     "connecting": (OUTCOME_PROFILE,),
@@ -436,12 +457,18 @@ PROFILES_BY_STATE: dict[str, tuple[OCRProfile, ...]] = {
 PROFILES_BY_ACTION: dict[str, tuple[OCRProfile, ...]] = {
     "accept_network_failure": (START_PROFILE, HOME_PROFILE),
     "start": (HOME_PROFILE, START_PROFILE),
-    "join_game": (SERVER_PROFILE, HOME_PROFILE),
+    "join_game": (SERVER_PROFILE, DLC_PROFILE, HOME_PROFILE),
     "join_server": (EVENT_PROFILE, OUTCOME_PROFILE, SERVER_PROFILE),
     "join_event": (OUTCOME_PROFILE, EVENT_PROFILE),
     "cancel": (BACK_PROFILE,),
     "back": (HOME_PROFILE, BACK_PROFILE),
+    "back_dlc": (HOME_PROFILE, DLC_PROFILE),
     "dismiss_joining_failed": (JOINING_FAILED_PROFILE, SERVER_PROFILE),
+}
+
+DETECTED_ANCHOR_ZONES = {
+    "join_game": HOME_JOIN,
+    "back_dlc": DLC_BACK,
 }
 
 
@@ -704,9 +731,13 @@ class ScreenReader:
 
         anchors: dict[str, tuple[float, float]] = {}
 
-        join_game = candidates(
-            lambda value: self._equals_language(value, "join_game")
-        )
+        join_game = [
+            item
+            for item in candidates(
+                lambda value: self._equals_language(value, "join_game")
+            )
+            if point_in_rect(item.center, HOME_JOIN)
+        ]
         if join_game:
             anchors["join_game"] = max(
                 join_game, key=lambda item: item.confidence
@@ -733,6 +764,13 @@ class ScreenReader:
         if back:
             anchors["back"] = max(
                 back, key=lambda item: (item.center[1], item.confidence)
+            ).center
+        dlc_back = [
+            item for item in back if point_in_rect(item.center, DLC_BACK)
+        ]
+        if dlc_back:
+            anchors["back_dlc"] = max(
+                dlc_back, key=lambda item: item.confidence
             ).center
 
         accept = candidates(
@@ -785,6 +823,7 @@ class ScreenReader:
             and self._contains_language(compact, "start")
         )
         home = self._contains_language(compact, "join_game")
+        dlc_packs = self._contains_language(compact, "dlc_screen")
         server_browser = self._contains_language(compact, "server_browser")
         connecting = self._contains_language(compact, "joining_server")
 
@@ -794,6 +833,8 @@ class ScreenReader:
             state = "joining_failed"
         elif network_failure:
             state = "network_failure"
+        elif dlc_packs:
+            state = "dlc_packs"
         elif event:
             state = "event"
         elif home:
@@ -914,6 +955,7 @@ class ScreenReader:
             "connection_failed": "cancel",
             "network_failure": "accept_network_failure",
             "joining_failed": "dismiss_joining_failed",
+            "dlc_packs": "back_dlc",
         }.get(result.state)
         if required_anchor is not None and required_anchor not in result.anchors:
             return False
@@ -1036,6 +1078,18 @@ class ArkLoginBot:
             return ClickResult.STALE
 
         left, top, width, height = fresh_bounds
+        safe_zone = DETECTED_ANCHOR_ZONES.get(position_name)
+        if (
+            detected_position is not None
+            and safe_zone is not None
+            and not point_in_rect(detected_position, safe_zone)
+        ):
+            self.logger.warning(
+                "OCR anchor for %s is outside its safe region: "
+                "using the configured fallback.",
+                position_name,
+            )
+            detected_position = None
         if detected_position is not None:
             x = left + round(width * detected_position[0])
             y = top + round(height * detected_position[1])
@@ -1076,11 +1130,16 @@ class ArkLoginBot:
                         position_name,
                     )
                     return ClickResult.STALE
+                # The game or physical mouse input may move the pointer during
+                # the short hover delay. Reassert the target immediately
+                # before mouse-down so a nearby card cannot receive the click.
+                win32api.SetCursorPos((x, y))
                 win32api.mouse_event(
                     win32con.MOUSEEVENTF_LEFTDOWN, 0, 0, 0, 0
                 )
                 button_down = True
                 self.sleep(float(self.config["click_hold_seconds"]))
+                win32api.SetCursorPos((x, y))
                 win32api.mouse_event(
                     win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0
                 )
@@ -1091,6 +1150,7 @@ class ArkLoginBot:
                 # before propagating the interruption.
                 try:
                     if button_down:
+                        win32api.SetCursorPos((x, y))
                         win32api.mouse_event(
                             win32con.MOUSEEVENTF_LEFTUP, 0, 0, 0, 0
                         )
@@ -1404,6 +1464,16 @@ class ArkLoginBot:
             )
             return
 
+        if recognition.state == "dlc_packs":
+            self.perform_action(
+                recognition,
+                window,
+                bounds,
+                "back_dlc",
+                "DLC screen opened unexpectedly: pressing BACK.",
+            )
+            return
+
         if recognition.state == "home":
             self.perform_action(
                 recognition,
@@ -1612,6 +1682,13 @@ def check_reference_images(
             "network_failure",
             OUTCOME_PROFILE,
             "accept_network_failure",
+            False,
+        ),
+        (
+            "07_dlc_owned.png",
+            "dlc_packs",
+            DLC_PROFILE,
+            "back_dlc",
             False,
         ),
     )

@@ -32,6 +32,9 @@ The login process has several steps illustrated by the screenshots in
 - When `JOINING FAILED / Unknown Error` appears, press `OK`. The dialog closes
   and returns to the server list. If the list is empty, wait until the target
   server becomes available again.
+- `07_dlc_owned.png`: this screen may open if an unintended click reaches
+  `DLC PACKS` instead of `JOIN GAME`. Press the centered `BACK` button and
+  return to `01_first_screen.png`.
 
 # REQUIREMENTS
 

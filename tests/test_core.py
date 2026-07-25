@@ -112,6 +112,10 @@ class TextRecognitionTests(unittest.TestCase):
         )
         self.assertEqual(title_only.state, "joining_failed")
 
+    def test_dlc_packs(self):
+        result = self.reader.classify_text(["DLC OWNED (8/9)", "BACK"])
+        self.assertEqual(result.state, "dlc_packs")
+
     def test_event(self):
         result = self.reader.classify_text(
             ["EU-PVE-GENONE6448", "REQUIRED MODS", "JOIN"]
@@ -212,6 +216,18 @@ class CoordinateTests(unittest.TestCase):
         )
         self.assertEqual(anchors["dismiss_joining_failed"], (0.5, 0.63))
 
+    def test_join_game_anchor_outside_card_is_rejected(self):
+        anchors = self.reader.action_anchors(
+            (OCRDetection("JOIN GAME", 0.99, (0.25, 0.86)),)
+        )
+        self.assertNotIn("join_game", anchors)
+
+    def test_ocr_anchor_finds_dlc_back(self):
+        anchors = self.reader.action_anchors(
+            (OCRDetection("BACK", 0.99, (0.5, 0.85)),)
+        )
+        self.assertEqual(anchors["back_dlc"], (0.5, 0.85))
+
 
 class FlowTests(unittest.TestCase):
     def test_server_full_returns_through_start_to_join_game(self):
@@ -266,6 +282,53 @@ class FlowTests(unittest.TestCase):
                 "join_game",
             ],
         )
+
+    def test_dlc_screen_returns_to_home(self):
+        bot = ArkLoginBot.__new__(ArkLoginBot)
+        bot.config = {
+            "server_number": "6448",
+            "event_screen_enabled": True,
+            "post_cancel_wait_seconds": 2,
+        }
+        bot.logger = logging.getLogger("arklogin.dlc-flow-test")
+        bot.now = lambda: 0.0
+        bot.attempt = AttemptTracker()
+        bot.back_recovery = None
+        bot.last_state = None
+        actions = []
+        bot.perform_action = (
+            lambda _recognition, _window, _bounds, name, _description: (
+                actions.append(name) or ClickResult.SENT
+            )
+        )
+        bot.notice = lambda *_args, **_kwargs: None
+
+        window = GameWindow(hwnd=1, pid=1, title="Ark: Survival Ascended")
+        bounds = (0, 0, 1920, 1152)
+        bot.handle(
+            Recognition(
+                "dlc_packs",
+                "",
+                False,
+                ("DLC OWNED (8/9)", "BACK"),
+                {"back_dlc": (0.5, 0.85)},
+            ),
+            window,
+            bounds,
+        )
+        bot.handle(
+            Recognition(
+                "home",
+                "",
+                False,
+                ("JOIN GAME",),
+                {"join_game": (0.24, 0.69)},
+            ),
+            window,
+            bounds,
+        )
+
+        self.assertEqual(actions, ["back_dlc", "join_game"])
 
 
 if __name__ == "__main__":

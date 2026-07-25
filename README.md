@@ -172,6 +172,8 @@ The application:
 - when `JOINING FAILED / Unknown Error` appears, presses `OK`, returns to the
   server list, and waits without clicking until the configured server is back
   in the first row;
+- if an unintended click opens the `DLC OWNED` screen, recognizes it and
+  presses its centered `BACK` button to return to `JOIN GAME`;
 - verifies the server number in the first row through OCR before pressing
   `JOIN`;
 - does not press `BACK` during a normal attempt. It does so only after
