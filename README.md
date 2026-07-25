@@ -1,82 +1,81 @@
 # ARK Login
 
-Automatizza i tentativi di accesso a un server pieno di **ARK: Survival
-Ascended**, usando esclusivamente la finestra del processo `ArkAscended`.
+Automates login attempts to a full **ARK: Survival Ascended** server while
+interacting exclusively with the `ArkAscended` process window.
 
-## Avvio
+## Running
 
-1. Apri `config.json` e controlla `server_number` ed
-   `event_screen_enabled`. Il server cercato deve essere la prima riga della
-   lista: se non è lì, il programma lo considera assente e non fa clic.
-2. Avvia ARK in finestra e raggiungi una qualunque delle schermate descritte
-   nelle specifiche.
-3. Esegui `arklogin.bat` oppure fai doppio clic sul file. Questo launcher usa
-   sempre il Python contenuto in `venv`.
-4. Per fermare il programma, premi `Ctrl+C` nella sua finestra oppure chiudila.
+1. Open `config.json` and check `server_number` and
+   `event_screen_enabled`. The target server must be in the first list row. If
+   it is not there, the application treats it as unavailable and does not
+   click.
+2. Start ARK in windowed mode and navigate to any screen described in the
+   specifications.
+3. Run or double-click `arklogin.bat`. This launcher always uses the Python
+   interpreter from `venv`.
+4. To stop the application, press `Ctrl+C` in its console window or close it.
 
-Se l'ambiente non è ancora pronto, esegui una volta `avvia_arklogin.bat`: crea
-il `venv`, se necessario, e installa automaticamente le librerie richieste.
+If the environment is not ready yet, run `setup_arklogin.bat` once. It creates
+the `venv`, when necessary, and automatically installs the required libraries.
 
-## Configurazione
+## Configuration
 
-- `server_number`: numero univoco del server; la configurazione corrente usa
-  `6468`, come gli screenshot di riferimento.
-- `event_screen_enabled`: se `true`, conferma la schermata facoltativa dei
-  mod/evento; se `false`, la riconosce ma non fa clic.
-- `active_poll_interval_seconds`: intervallo tra controlli mentre ARK è in
-  primo piano; `0.2` secondi rende rapidi i tentativi.
-- `foreground_reacquire_interval_seconds`: ARK viene riportato in primo piano
-  soltanto dopo 5 secondi, lasciando il tempo di selezionare la console e
-  premere `Ctrl+C`.
-- `same_action_retry_seconds`: intervallo minimo prima di ripetere lo stesso
-  pulsante. Un pulsante diverso può essere premuto subito.
-- `post_cancel_wait_seconds`: attesa tra `CANCEL` e `BACK`.
-- `success_unknown_confirm_seconds`: durata minima usata per confermare che la
-  schermata di connessione sia scomparsa.
-- `success_pause_seconds`: pausa senza riattivazione forzata di ARK dopo una
-  probabile connessione riuscita.
-- `unchanged_ocr_refresh_seconds` e `visual_change_threshold`: regolano la
-  cache visiva che evita di ripetere OCR su una schermata invariata.
-- `full_scan_fallback_seconds`: intervallo minimo tra due letture complete
-  quando i profili a zone non riconoscono lo stato.
-- `restore_mouse_position`: riporta il puntatore dov'era dopo ogni clic.
+- `server_number`: unique server number. The current configuration uses
+  `6468`, matching the reference screenshots.
+- `event_screen_enabled`: when `true`, confirms the optional event/mod screen.
+  When `false`, recognizes it without clicking.
+- `active_poll_interval_seconds`: interval between checks while ARK is in the
+  foreground. The `0.2`-second default keeps attempts responsive.
+- `foreground_reacquire_interval_seconds`: waits 5 seconds before bringing ARK
+  back to the foreground, leaving enough time to select the console and press
+  `Ctrl+C`.
+- `same_action_retry_seconds`: minimum interval before retrying the same
+  button. A different button can be pressed immediately.
+- `post_cancel_wait_seconds`: delay between `CANCEL` and `BACK`.
+- `success_unknown_confirm_seconds`: minimum time used to confirm that the
+  connection screen has disappeared.
+- `success_pause_seconds`: pause without forced ARK focus after a probable
+  successful login.
+- `unchanged_ocr_refresh_seconds` and `visual_change_threshold`: control the
+  visual cache that avoids repeated OCR on an unchanged screen.
+- `full_scan_fallback_seconds`: minimum interval between full-screen scans
+  when region profiles cannot recognize the current state.
+- `restore_mouse_position`: restores the previous pointer position after each
+  click.
 
-Il riconoscimento usa piccole zone proporzionali dedicate allo stato atteso,
-al pulsante e agli eventuali popup. Non legge normalmente l'intera lista
-server: controlla intestazione, prima riga e pulsante `JOIN`. Le coordinate
-restano proporzionali, quindi funzionano con dimensioni diverse della finestra.
-Una lettura completa viene mantenuta come recupero dopo resize o schermate
-inattese.
+Recognition uses small proportional regions dedicated to the expected state,
+button, and possible popups. It does not normally read the complete server
+list: it checks the header, first row, and `JOIN` button. Coordinates remain
+proportional, so they work across different window sizes. A full scan remains
+available as a recovery path after resizing or unexpected screens.
 
-L'OCR individua anche il centro effettivo dei pulsanti. Le posizioni in
-`click_positions` sono usate soltanto come fallback quando il testo del
-pulsante non viene localizzato.
+OCR also locates the actual center of each button. Values in `click_positions`
+are used only as fallbacks when the button text cannot be located.
 
-## Sicurezza e diagnosi
+## Safety and diagnostics
 
-Il programma:
+The application:
 
-- non fa clic se titolo e nome del processo non corrispondono;
-- verifica focus e dimensioni della finestra di nuovo subito prima di ogni
-  clic;
-- se un tentativo avanzato termina con `NETWORK FAILURE / Server full`,
-  preme `ACCEPT`, attende la schermata iniziale, preme `PRESS TO START` e
-  riparte da `JOIN GAME`;
-- verifica tramite OCR il numero del server nella prima riga prima dei
-  pulsanti `JOIN`;
-- non preme `BACK` durante un normale tentativo: lo fa soltanto dopo aver
-  rilevato `CONNECTION FAILED` e premuto una sola volta `CANCEL`;
-- dopo `connecting`, se la UI di login scompare stabilmente, sospende i clic e
-  non ruba il focus per il tempo configurato;
-- salva i dettagli in `arklogin.log`.
+- does not click unless both the window title and process name match;
+- rechecks focus and window bounds immediately before each click;
+- when an advanced attempt ends with `NETWORK FAILURE / Server full`, presses
+  `ACCEPT`, waits for the start screen, presses `PRESS TO START`, and resumes
+  from `JOIN GAME`;
+- verifies the server number in the first row through OCR before pressing
+  `JOIN`;
+- does not press `BACK` during a normal attempt. It does so only after
+  detecting `CONNECTION FAILED` and pressing `CANCEL` once;
+- after `connecting`, pauses clicks and avoids reclaiming focus for the
+  configured duration when the login UI disappears consistently;
+- writes diagnostic details to `arklogin.log`.
 
-Per osservare il funzionamento senza produrre clic:
+To observe the application without sending clicks:
 
 ```powershell
 .\venv\Scripts\python.exe .\arklogin.py --dry-run --verbose
 ```
 
-Per verificare e misurare i profili OCR ottimizzati su tutti gli screenshot:
+To check and benchmark optimized OCR profiles against all screenshots:
 
 ```powershell
 .\venv\Scripts\python.exe .\arklogin.py --check-images --verbose

@@ -99,10 +99,10 @@ def load_config(path: Path) -> dict[str, Any]:
         with path.open("r", encoding="utf-8") as config_file:
             config = json.load(config_file)
     except FileNotFoundError as exc:
-        raise ValueError(f"File di configurazione non trovato: {path}") from exc
+        raise ValueError(f"Configuration file not found: {path}") from exc
     except json.JSONDecodeError as exc:
         raise ValueError(
-            f"JSON non valido in {path}, riga {exc.lineno}: {exc.msg}"
+            f"Invalid JSON in {path}, line {exc.lineno}: {exc.msg}"
         ) from exc
 
     required = {
@@ -116,13 +116,15 @@ def load_config(path: Path) -> dict[str, Any]:
     }
     missing = sorted(required.difference(config))
     if missing:
-        raise ValueError(f"Parametri mancanti in config.json: {', '.join(missing)}")
+        raise ValueError(
+            f"Missing parameters in config.json: {', '.join(missing)}"
+        )
 
     config["server_number"] = str(config["server_number"]).strip()
     if not config["server_number"].isdigit():
-        raise ValueError("server_number deve contenere soltanto cifre")
+        raise ValueError("server_number must contain digits only")
     if not isinstance(config["event_screen_enabled"], bool):
-        raise ValueError("event_screen_enabled deve essere true oppure false")
+        raise ValueError("event_screen_enabled must be true or false")
 
     # Backwards-compatible defaults for configuration files from the first
     # release. The active OCR loop and foreground reacquisition are deliberately
@@ -164,10 +166,10 @@ def load_config(path: Path) -> dict[str, Any]:
         "click_restore_delay_seconds",
     ):
         if not isinstance(config[key], (int, float)) or config[key] < 0:
-            raise ValueError(f"{key} deve essere un numero maggiore o uguale a zero")
+            raise ValueError(f"{key} must be a number greater than or equal to zero")
 
     if not 0 <= float(config["ocr_min_confidence"]) <= 1:
-        raise ValueError("ocr_min_confidence deve essere compreso tra 0 e 1")
+        raise ValueError("ocr_min_confidence must be between 0 and 1")
 
     expected_positions = {
         "start",
@@ -181,7 +183,8 @@ def load_config(path: Path) -> dict[str, Any]:
     positions = config["click_positions"]
     if not isinstance(positions, dict) or not expected_positions.issubset(positions):
         raise ValueError(
-            "click_positions deve contenere: " + ", ".join(sorted(expected_positions))
+            "click_positions must contain: "
+            + ", ".join(sorted(expected_positions))
         )
     for name, position in positions.items():
         if (
@@ -191,7 +194,7 @@ def load_config(path: Path) -> dict[str, Any]:
             or not all(0 <= value <= 1 for value in position)
         ):
             raise ValueError(
-                f"click_positions.{name} deve essere una coppia [x, y] tra 0 e 1"
+                f"click_positions.{name} must be an [x, y] pair between 0 and 1"
             )
     return config
 
@@ -881,14 +884,15 @@ class ArkLoginBot:
 
         if not self.dry_run and win32gui.GetForegroundWindow() != window.hwnd:
             self.logger.debug(
-                "Clic %s annullato: ARK non è più in primo piano.", position_name
+                "Click %s cancelled: ARK is no longer in the foreground.",
+                position_name,
             )
             return ClickResult.FOCUS_LOST
 
         fresh_bounds = self.window_manager.client_bounds(window)
         if fresh_bounds is None or fresh_bounds != bounds:
             self.logger.debug(
-                "Clic %s annullato: dimensioni o posizione della finestra cambiate.",
+                "Click %s cancelled: the window size or position changed.",
                 position_name,
             )
             return ClickResult.STALE
@@ -898,7 +902,7 @@ class ArkLoginBot:
             x = left + round(width * detected_position[0])
             y = top + round(height * detected_position[1])
             self.logger.debug(
-                "Pulsante %s individuato dall'OCR al punto client (%d, %d).",
+                "OCR located button %s at client point (%d, %d).",
                 position_name,
                 x - left,
                 y - top,
@@ -908,12 +912,12 @@ class ArkLoginBot:
                 bounds, self.config["click_positions"][position_name]
             )
             self.logger.debug(
-                "Pulsante %s non localizzato dall'OCR: uso la posizione di fallback.",
+                "OCR did not locate button %s: using the fallback position.",
                 position_name,
             )
 
         if self.dry_run:
-            self.logger.info("[SIMULAZIONE] %s", description)
+            self.logger.info("[DRY RUN] %s", description)
         else:
             previous_cursor = win32api.GetCursorPos()
             button_down = False
@@ -922,15 +926,15 @@ class ArkLoginBot:
                 self.sleep(float(self.config["click_hover_seconds"]))
                 if win32gui.GetForegroundWindow() != window.hwnd:
                     self.logger.debug(
-                        "Clic %s annullato subito prima della pressione: ARK "
-                        "non è più in primo piano.",
+                        "Click %s cancelled immediately before mouse-down: "
+                        "ARK is no longer in the foreground.",
                         position_name,
                     )
                     return ClickResult.FOCUS_LOST
                 if self.window_manager.client_bounds(window) != fresh_bounds:
                     self.logger.debug(
-                        "Clic %s annullato subito prima della pressione: "
-                        "dimensioni o posizione della finestra cambiate.",
+                        "Click %s cancelled immediately before mouse-down: "
+                        "the window size or position changed.",
                         position_name,
                     )
                     return ClickResult.STALE
@@ -1107,8 +1111,8 @@ class ArkLoginBot:
                 self.attempt.reset()
                 self.set_profiles((OUTCOME_PROFILE,))
                 self.logger.info(
-                    "Probabile connessione riuscita: automazione in pausa per %.0f "
-                    "secondi. Puoi premere Ctrl+C senza che ARK riprenda il focus.",
+                    "Login probably succeeded: automation paused for %.0f "
+                    "seconds. You can press Ctrl+C without ARK reclaiming focus.",
                     float(self.config["success_pause_seconds"]),
                 )
             return
@@ -1150,14 +1154,14 @@ class ArkLoginBot:
         ):
             if recognition.state in {"server_list", "connecting"}:
                 self.logger.warning(
-                    "Recupero CANCEL/BACK ancora bloccato: riprovo BACK."
+                    "CANCEL/BACK recovery is still stuck: retrying BACK."
                 )
                 result = self.perform_action(
                     recognition,
                     window,
                     bounds,
                     "back",
-                    "Recupero ancora bloccato: riprovo BACK.",
+                    "Recovery is still stuck: retrying BACK.",
                 )
                 recovery.started_at = now
                 if result is ClickResult.SENT:
@@ -1166,12 +1170,12 @@ class ArkLoginBot:
                 return True
             if recognition.state == "connection_failed":
                 self.logger.warning(
-                    "CANCEL non è stato recepito: avvio un nuovo recupero."
+                    "CANCEL was not accepted: starting a new recovery cycle."
                 )
                 self.back_recovery = None
                 return False
             self.logger.warning(
-                "Recupero CANCEL/BACK in attesa di una schermata nota."
+                "CANCEL/BACK recovery is waiting for a known screen."
             )
             recovery.started_at = now
             return True
@@ -1189,7 +1193,7 @@ class ArkLoginBot:
                     window,
                     bounds,
                     "back",
-                    "Tentativo annullato: premo BACK e preparo un nuovo ciclo.",
+                    "Attempt cancelled: pressing BACK and preparing a new cycle.",
                 )
                 if result is ClickResult.SENT:
                     recovery.phase = "wait_back_exit"
@@ -1203,7 +1207,7 @@ class ArkLoginBot:
                     window,
                     bounds,
                     "back",
-                    "BACK non ancora recepito: riprovo.",
+                    "BACK was not accepted yet: retrying.",
                 )
             return True
         return True
@@ -1216,8 +1220,8 @@ class ArkLoginBot:
         recognition_fresh: bool = True,
     ) -> None:
         if recognition.state != self.last_state:
-            self.logger.info("Schermata riconosciuta: %s", recognition.state)
-            self.logger.debug("Testo OCR: %s", " | ".join(recognition.lines))
+            self.logger.info("Recognized screen: %s", recognition.state)
+            self.logger.debug("OCR text: %s", " | ".join(recognition.lines))
             self.last_state = recognition.state
 
         self.track_attempt(recognition, fresh=recognition_fresh)
@@ -1230,7 +1234,7 @@ class ArkLoginBot:
                 window,
                 bounds,
                 "cancel",
-                "Server pieno: premo CANCEL.",
+                "Server full: pressing CANCEL.",
             )
             if result is ClickResult.SENT:
                 now = self.now()
@@ -1247,7 +1251,7 @@ class ArkLoginBot:
                 window,
                 bounds,
                 "accept_network_failure",
-                "Messaggio di rete/server pieno: premo ACCEPT.",
+                "Network/server-full message: pressing ACCEPT.",
             )
             return
 
@@ -1257,7 +1261,7 @@ class ArkLoginBot:
                 window,
                 bounds,
                 "join_game",
-                "Schermata iniziale: premo JOIN GAME.",
+                "Home screen: pressing JOIN GAME.",
             )
             return
 
@@ -1267,7 +1271,7 @@ class ArkLoginBot:
                 window,
                 bounds,
                 "start",
-                "Schermata di avvio: premo PRESS TO START.",
+                "Start screen: pressing PRESS TO START.",
             )
             return
 
@@ -1278,13 +1282,13 @@ class ArkLoginBot:
                     window,
                     bounds,
                     "join_server",
-                    f"Server {self.config['server_number']} verificato: premo JOIN.",
+                    f"Server {self.config['server_number']} verified: pressing JOIN.",
                 )
             else:
                 self.notice(
                     "server_missing",
-                    f"Lista pronta, ma il server {self.config['server_number']} "
-                    "non è visibile: nessun clic.",
+                    f"The list is ready, but server "
+                    f"{self.config['server_number']} is not visible: no click.",
                 )
             return
 
@@ -1292,8 +1296,8 @@ class ArkLoginBot:
             if not bool(self.config["event_screen_enabled"]):
                 self.notice(
                     "event_disabled",
-                    "Schermata evento/mod richiesta rilevata, ma la gestione è "
-                    "disattivata in config.json.",
+                    "Required event/mod screen detected, but its handling is "
+                    "disabled in config.json.",
                 )
             elif recognition.target_server_found:
                 self.perform_action(
@@ -1301,21 +1305,21 @@ class ArkLoginBot:
                     window,
                     bounds,
                     "join_event",
-                    f"Conferma evento/mod per il server "
-                    f"{self.config['server_number']}: premo JOIN.",
+                    f"Confirming event/mod for server "
+                    f"{self.config['server_number']}: pressing JOIN.",
                 )
             else:
                 self.notice(
                     "event_server_mismatch",
-                    "Conferma evento/mod rilevata, ma il numero del server non "
-                    "corrisponde: nessun clic.",
+                    "Event/mod confirmation detected, but the server number "
+                    "does not match: no click.",
                 )
             return
 
         if recognition.state == "connecting":
             self.notice(
                 "connecting",
-                "Connessione in corso: attendo l'esito senza interrompere il tentativo.",
+                "Connection in progress: waiting without interrupting the attempt.",
                 interval=20.0,
             )
 
@@ -1325,7 +1329,7 @@ class ArkLoginBot:
         if window is None:
             self.notice(
                 "window_missing",
-                "Attendo la finestra di ARK: Survival Ascended...",
+                "Waiting for the ARK: Survival Ascended window...",
             )
             return 0.5
 
@@ -1352,7 +1356,7 @@ class ArkLoginBot:
             if not self.window_manager.activate(window):
                 self.notice(
                     "focus_failed",
-                    "ARK non può essere portato in primo piano: attendo.",
+                    "ARK could not be brought to the foreground: waiting.",
                     interval=5.0,
                 )
                 return 0.25
@@ -1369,7 +1373,7 @@ class ArkLoginBot:
         if captured is None:
             self.notice(
                 "window_unavailable",
-                "La finestra di ARK è minimizzata o troppo piccola: attendo.",
+                "The ARK window is minimized or too small: waiting.",
             )
             self.next_scan_at = started + float(
                 self.config["active_poll_interval_seconds"]
@@ -1379,7 +1383,7 @@ class ArkLoginBot:
         frame, bounds = captured
         recognition, cache_hit, attempts, ocr_elapsed = self.recognize_adaptive(frame)
         self.logger.debug(
-            "Scansione OCR: %.3f s, profili=%s, tentativi=%d, cache=%s.",
+            "OCR scan: %.3f s, profiles=%s, attempts=%d, cache=%s.",
             ocr_elapsed,
             self._profile_key() or ("full",),
             attempts,
@@ -1402,23 +1406,23 @@ class ArkLoginBot:
 
     def run(self) -> None:
         self.logger.info(
-            "ARK Login avviato per il server %s. Premi Ctrl+C per fermarlo.",
+            "ARK Login started for server %s. Press Ctrl+C to stop it.",
             self.config["server_number"],
         )
         if self.dry_run:
-            self.logger.info("Modalità simulazione attiva: nessun clic verrà eseguito.")
+            self.logger.info("Dry-run mode is active: no clicks will be sent.")
 
         while self.max_actions is None or self.actions < self.max_actions:
             delay = self.step()
             self.sleep(min(0.25, max(0.01, delay)))
 
-        self.logger.info("Numero massimo di azioni raggiunto; arresto completato.")
+        self.logger.info("Maximum action count reached; shutdown complete.")
 
 
 def reference_frame(path: Path) -> np.ndarray:
     frame = cv2.imread(str(path), cv2.IMREAD_COLOR)
     if frame is None:
-        raise ValueError(f"Impossibile leggere l'immagine: {path}")
+        raise ValueError(f"Unable to read image: {path}")
     height, width = frame.shape[:2]
     title_sample = frame[: max(1, round(height * 0.05)), width // 4 : width * 3 // 4]
     if float(np.mean(title_sample)) > 150:
@@ -1481,8 +1485,8 @@ def check_reference_images(
         )
         failures += 0 if matches else 1
         logger.info(
-            "%s -> %-18s atteso=%-18s profilo=%-7s OCR=%.3fs "
-            "server_%s=%s pulsante_%s=%s",
+            "%s -> %-18s expected=%-18s profile=%-7s OCR=%.3fs "
+            "server_%s=%s button_%s=%s",
             name,
             recognition.state,
             expected_state,
@@ -1493,12 +1497,12 @@ def check_reference_images(
             expected_anchor,
             anchor_found,
         )
-        logger.debug("Testo OCR %s: %s", name, " | ".join(recognition.lines))
+        logger.debug("OCR text for %s: %s", name, " | ".join(recognition.lines))
     if failures:
-        logger.error("Verifica immagini fallita per %d schermate.", failures)
+        logger.error("Reference image check failed for %d screens.", failures)
         return 1
     logger.info(
-        "Tutte le schermate di riferimento sono state riconosciute in %.3f s.",
+        "All reference screens were recognized in %.3f s.",
         total_elapsed,
     )
     return 0
@@ -1506,35 +1510,35 @@ def check_reference_images(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Automatizza i tentativi di accesso a un server ARK ASA pieno."
+        description="Automates login attempts to a full ARK: Survival Ascended server."
     )
     parser.add_argument(
         "--config",
         type=Path,
         default=DEFAULT_CONFIG_PATH,
-        help="Percorso del file JSON di configurazione.",
+        help="Path to the JSON configuration file.",
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="Riconosce le schermate e registra le azioni senza fare clic.",
+        help="Recognizes screens and logs actions without clicking.",
     )
     parser.add_argument(
         "--check-images",
         action="store_true",
         help=(
-            "Verifica e misura i profili OCR ottimizzati usando gli screenshot "
-            "nella cartella docs."
+            "Checks and benchmarks optimized OCR profiles using screenshots "
+            "from the docs directory."
         ),
     )
     parser.add_argument(
-        "--verbose", action="store_true", help="Mostra anche i dettagli diagnostici."
+        "--verbose", action="store_true", help="Also shows diagnostic details."
     )
     parser.add_argument(
         "--max-actions",
         type=int,
         default=None,
-        help="Si arresta dopo questo numero di azioni (utile per prove controllate).",
+        help="Stops after this number of actions (useful for controlled tests).",
     )
     return parser.parse_args()
 
@@ -1546,20 +1550,20 @@ def main() -> int:
     try:
         config = load_config(args.config.resolve())
         if args.max_actions is not None and args.max_actions <= 0:
-            raise ValueError("--max-actions deve essere maggiore di zero")
+            raise ValueError("--max-actions must be greater than zero")
         if args.check_images:
             return check_reference_images(config, logger, APP_DIR / "docs")
         bot = ArkLoginBot(config, logger, args.dry_run, args.max_actions)
         bot.run()
         return 0
     except KeyboardInterrupt:
-        logger.info("Arresto richiesto dall'utente.")
+        logger.info("Shutdown requested by the user.")
         return 0
     except (ValueError, OSError, psutil.Error) as exc:
         logger.error("%s", exc)
         return 2
     except Exception:
-        logger.exception("Errore inatteso.")
+        logger.exception("Unexpected error.")
         return 3
 
 

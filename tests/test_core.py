@@ -102,7 +102,7 @@ class ConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.json"
             path.write_text(json.dumps(config), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "soltanto cifre"):
+            with self.assertRaisesRegex(ValueError, "digits only"):
                 load_config(path)
 
 
