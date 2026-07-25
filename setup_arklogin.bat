@@ -3,12 +3,12 @@ setlocal
 cd /d "%~dp0"
 
 if not exist "venv\Scripts\python.exe" (
-    echo Creazione dell'ambiente Python...
+    echo Creating the Python virtual environment...
     py -3 -m venv venv
     if errorlevel 1 goto :error
 )
 
-echo Controllo delle librerie necessarie...
+echo Checking required dependencies...
 "venv\Scripts\python.exe" -m pip install --disable-pip-version-check -r requirements.txt
 if errorlevel 1 goto :error
 
@@ -17,13 +17,13 @@ echo.
 set "ARKLOGIN_EXIT=%ERRORLEVEL%"
 echo.
 if not "%ARKLOGIN_EXIT%"=="0" (
-    echo ARK Login si e' chiuso con errore %ARKLOGIN_EXIT%.
+    echo ARK Login exited with error %ARKLOGIN_EXIT%.
 )
 pause
 exit /b %ARKLOGIN_EXIT%
 
 :error
 echo.
-echo Installazione non riuscita. Controlla la connessione Internet e riprova.
+echo Installation failed. Check your Internet connection and try again.
 pause
 exit /b 1

@@ -6,24 +6,49 @@ from pathlib import Path
 
 from arklogin import (
     ArkLoginBot,
+    AttemptTracker,
+    ClickResult,
+    DEFAULT_LANG_PATH,
     GameWindow,
     OCRDetection,
     Recognition,
     ScreenReader,
     canonical,
     load_config,
+    load_language,
     relative_click_point,
 )
 
 
+def make_reader(server_number="6448"):
+    reader = ScreenReader.__new__(ScreenReader)
+    reader.minimum_confidence = 0.45
+    reader.server_number = server_number
+    reader.set_language(load_language(DEFAULT_LANG_PATH))
+    return reader
+
+
 class TextRecognitionTests(unittest.TestCase):
     def setUp(self):
-        self.reader = ScreenReader.__new__(ScreenReader)
-        self.reader.minimum_confidence = 0.45
-        self.reader.server_number = "6448"
+        self.reader = make_reader()
 
     def test_canonical(self):
         self.assertEqual(canonical("EU-PVE-GenOne 6448"), "EUPVEGENONE6448")
+        self.assertEqual(canonical("Échec réseau"), "ÉCHECRÉSEAU")
+        self.assertEqual(canonical("E\u0301chec"), "ÉCHEC")
+
+    def test_custom_language_aliases(self):
+        language = dict(self.reader.language)
+        language["join_game"] = ("PLAY ONLINE",)
+        self.reader.set_language(language)
+
+        result = self.reader.classify_text(["PLAY ONLINE"])
+        anchors = self.reader.action_anchors(
+            (OCRDetection("PLAY ONLINE", 0.99, (0.2, 0.7)),)
+        )
+
+        self.assertEqual(result.state, "home")
+        self.assertEqual(anchors["join_game"], (0.2, 0.7))
 
     def test_home(self):
         result = self.reader.classify_text(["JOIN GAME", "CREATE OR RESUME GAME"])
@@ -42,6 +67,14 @@ class TextRecognitionTests(unittest.TestCase):
         self.assertEqual(result.state, "server_list")
         self.assertTrue(result.target_server_found)
 
+    def test_server_number_does_not_match_longer_numeric_id(self):
+        for wrong_id in ("16448", "64480"):
+            with self.subTest(wrong_id=wrong_id):
+                result = self.reader.classify_text(
+                    ["MULTIPLAYER SERVERS: 1", f"EU-PVE-GenOne{wrong_id}", "JOIN"]
+                )
+                self.assertFalse(result.target_server_found)
+
     def test_connecting_does_not_look_like_list_ready(self):
         result = self.reader.classify_text(
             ["MULTIPLAYER SERVERS: 0", "Joining server EU-PVE-GenOne6448"]
@@ -59,6 +92,21 @@ class TextRecognitionTests(unittest.TestCase):
             ["NETWORK FAILURE", "MESSAGE", "Server full.", "ACCEPT", "PRESS TO START"]
         )
         self.assertEqual(result.state, "network_failure")
+
+    def test_joining_failed(self):
+        result = self.reader.classify_text(
+            [
+                "MULTIPLAYER SERVERS: 0",
+                "JOINING FAILED",
+                "Unknown Error",
+                "OK",
+            ]
+        )
+        self.assertEqual(result.state, "joining_failed")
+        title_only = self.reader.classify_text(
+            ["MULTIPLAYER SERVERS: 0", "JOINING FAILED"]
+        )
+        self.assertEqual(title_only.state, "joining_failed")
 
     def test_event(self):
         result = self.reader.classify_text(
@@ -92,11 +140,21 @@ class ConfigTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / "config.json"
             path.write_text(json.dumps(config), encoding="utf-8")
-            with self.assertRaisesRegex(ValueError, "soltanto cifre"):
+            with self.assertRaisesRegex(ValueError, "digits only"):
                 load_config(path)
+
+    def test_missing_language_entries_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "lang.json"
+            path.write_text(json.dumps({"join": ["JOIN"]}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Missing language entries"):
+                load_language(path)
 
 
 class CoordinateTests(unittest.TestCase):
+    def setUp(self):
+        self.reader = make_reader()
+
     def test_extra_client_height_does_not_move_bottom_buttons(self):
         reference = relative_click_point((210, 193, 1920, 1152), [0.895, 0.875])
         taller = relative_click_point((210, 193, 1920, 1200), [0.895, 0.875])
@@ -104,7 +162,7 @@ class CoordinateTests(unittest.TestCase):
         self.assertEqual(taller, (1928, 1201))
 
     def test_ocr_anchor_uses_exact_join_not_join_last_played(self):
-        anchors = ScreenReader.action_anchors(
+        anchors = self.reader.action_anchors(
             (
                 OCRDetection("JOIN LAST PLAYED", 0.99, (0.88, 0.80)),
                 OCRDetection("JOIN", 0.96, (0.25, 0.74)),
@@ -112,6 +170,12 @@ class CoordinateTests(unittest.TestCase):
         )
         self.assertEqual(anchors["join_event"], (0.25, 0.74))
         self.assertEqual(anchors["join_server"], (0.25, 0.74))
+
+    def test_ocr_anchor_finds_joining_failed_ok(self):
+        anchors = self.reader.action_anchors(
+            (OCRDetection("OK", 0.99, (0.5, 0.63)),)
+        )
+        self.assertEqual(anchors["dismiss_joining_failed"], (0.5, 0.63))
 
 
 class FlowTests(unittest.TestCase):
@@ -123,18 +187,33 @@ class FlowTests(unittest.TestCase):
             "post_cancel_wait_seconds": 2,
         }
         bot.logger = logging.getLogger("arklogin.flow-test")
-        bot.pending_back = False
-        bot.cancel_time = 0.0
+        bot.now = lambda: 0.0
+        bot.attempt = AttemptTracker()
+        bot.back_recovery = None
         bot.last_state = None
         actions = []
-        bot.click = lambda _window, _bounds, name, _description, _detected=None: (
-            actions.append(name) or True
+        bot.perform_action = (
+            lambda _recognition, _window, _bounds, name, _description: (
+                actions.append(name) or ClickResult.SENT
+            )
         )
         bot.notice = lambda *_args, **_kwargs: None
 
         window = GameWindow(hwnd=1, pid=1, title="Ark: Survival Ascended")
         bounds = (0, 0, 1920, 1152)
         states = (
+            Recognition(
+                "joining_failed",
+                "",
+                False,
+                ("JOINING FAILED", "Unknown Error", "OK"),
+            ),
+            Recognition(
+                "server_list",
+                "",
+                False,
+                ("MULTIPLAYER SERVERS: 0",),
+            ),
             Recognition("network_failure", "", False, ("NETWORK FAILURE", "ACCEPT")),
             Recognition("start", "", False, ("PRESS", "TO START")),
             Recognition("home", "", False, ("JOIN GAME",)),
@@ -144,7 +223,13 @@ class FlowTests(unittest.TestCase):
             bot.handle(state, window, bounds)
 
         self.assertEqual(
-            actions, ["accept_network_failure", "start", "join_game"]
+            actions,
+            [
+                "dismiss_joining_failed",
+                "accept_network_failure",
+                "start",
+                "join_game",
+            ],
         )
 
 
