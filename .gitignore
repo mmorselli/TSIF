@@ -1,6 +1,6 @@
 __pycache__/
 *.py[cod]
-arklogin.log*
+tsif.log*
 live_before.png
 venv/
 /config.json

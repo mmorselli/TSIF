@@ -1,11 +1,11 @@
-# ARK Login V1.0
+# TSIF (The Server Is Full) V1.0
 
-Automates login attempts to a full **ARK: Survival Ascended** server while
+**TSIF** automates login attempts to a full **ARK: Survival Ascended** server while
 interacting exclusively with the `ArkAscended` process window.
 
 ## Running
 
-1. Run or double-click `setup_arklogin.bat` once. It creates the local
+1. Run or double-click `setup_tsif.bat` once. It creates the local
    configuration files, prepares the `venv`, installs the required libraries,
    and starts the application.
 2. Open `config.json` and check `server_number` and
@@ -14,7 +14,7 @@ interacting exclusively with the `ArkAscended` process window.
    click.
 3. Start ARK in windowed mode and navigate to any screen described in the
    specifications.
-4. Run or double-click `arklogin.bat`. This launcher always uses the Python
+4. Run or double-click `tsif.bat`. This launcher always uses the Python
    interpreter from `venv`.
 5. To stop the application, press `Ctrl+C` in its console window or close it.
 
@@ -38,7 +38,7 @@ with the corresponding examples and manually add any newly introduced entries.
   screen marker used by OCR. Relative paths are resolved from the application
   directory.
 - `log_file_enabled`: when `true`, writes diagnostic messages to the rotating
-  `arklogin.log` file. Set it to `false` to disable file logging while keeping
+  `tsif.log` file. Set it to `false` to disable file logging while keeping
   console messages available.
 - `active_poll_interval_seconds`: interval between checks while ARK is in the
   foreground. The `0.2`-second default keeps attempts responsive.
@@ -172,23 +172,25 @@ The application:
 - when `JOINING FAILED / Unknown Error` appears, presses `OK`, returns to the
   server list, and waits without clicking until the configured server is back
   in the first row;
+- if an unintended click opens the `DLC OWNED` screen, recognizes it and
+  presses its centered `BACK` button to return to `JOIN GAME`;
 - verifies the server number in the first row through OCR before pressing
   `JOIN`;
 - does not press `BACK` during a normal attempt. It does so only after
   detecting `CONNECTION FAILED` and pressing `CANCEL` once;
 - after `connecting`, pauses clicks and avoids reclaiming focus for the
   configured duration when the login UI disappears consistently;
-- writes diagnostic details to `arklogin.log` when `log_file_enabled` is
+- writes diagnostic details to `tsif.log` when `log_file_enabled` is
   enabled.
 
 To observe the application without sending clicks:
 
 ```powershell
-.\venv\Scripts\python.exe .\arklogin.py --dry-run --verbose
+.\venv\Scripts\python.exe .\tsif.py --dry-run --verbose
 ```
 
 To check and benchmark optimized OCR profiles against all screenshots:
 
 ```powershell
-.\venv\Scripts\python.exe .\arklogin.py --check-images --verbose
+.\venv\Scripts\python.exe .\tsif.py --check-images --verbose
 ```

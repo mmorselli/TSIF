@@ -7,6 +7,7 @@
   "ok": ["OK"],
   "start": ["TO START"],
   "connection_failed": ["CONNECTION FAILED"],
+  "dlc_screen": ["DLC OWNED"],
   "server_full": ["SERVER IS FULL"],
   "event_markers": [
     "REQUIRED MODS",

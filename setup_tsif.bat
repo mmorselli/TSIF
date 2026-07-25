@@ -33,14 +33,14 @@ echo Checking required dependencies...
 if errorlevel 1 goto :error
 
 echo.
-"venv\Scripts\python.exe" arklogin.py %*
-set "ARKLOGIN_EXIT=%ERRORLEVEL%"
+"venv\Scripts\python.exe" tsif.py %*
+set "TSIF_EXIT=%ERRORLEVEL%"
 echo.
-if not "%ARKLOGIN_EXIT%"=="0" (
-    echo ARK Login exited with error %ARKLOGIN_EXIT%.
+if not "%TSIF_EXIT%"=="0" (
+    echo TSIF exited with error %TSIF_EXIT%.
 )
 pause
-exit /b %ARKLOGIN_EXIT%
+exit /b %TSIF_EXIT%
 
 :error
 echo.
