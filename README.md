@@ -1,4 +1,4 @@
-# ARK Login
+# ARK Login V1.0
 
 Automates login attempts to a full **ARK: Survival Ascended** server while
 interacting exclusively with the `ArkAscended` process window.
@@ -24,6 +24,9 @@ the `venv`, when necessary, and automatically installs the required libraries.
   `6468`, matching the reference screenshots.
 - `event_screen_enabled`: when `true`, confirms the optional event/mod screen.
   When `false`, recognizes it without clicking.
+- `language_file`: path to the JSON file containing every button label and
+  screen marker used by OCR. Relative paths are resolved from the application
+  directory.
 - `active_poll_interval_seconds`: interval between checks while ARK is in the
   foreground. The `0.2`-second default keeps attempts responsive.
 - `foreground_reacquire_interval_seconds`: waits 5 seconds before bringing ARK
@@ -51,6 +54,96 @@ available as a recovery path after resizing or unexpected screens.
 
 OCR also locates the actual center of each button. Values in `click_positions`
 are used only as fallbacks when the button text cannot be located.
+
+## Language customization
+
+All text searched on the game screen is defined in `lang.json`. Each entry is
+a list of accepted OCR aliases. To support another game language, copy the
+file, translate every value while preserving the keys, and set
+`language_file` in `config.json` to the new filename.
+
+Multiple aliases can be retained when a label has alternative translations or
+OCR frequently returns a predictable variant:
+
+```json
+{
+  "join_game": ["PLAY ONLINE", "ENTER GAME"]
+}
+```
+
+The actual language file must contain all entries found in the supplied
+`lang.json`; startup stops with a clear error if an entry is missing or empty.
+Files are read as UTF-8, and matching supports Unicode letters and digits.
+
+## Performance optimizations
+
+The recognition and input loop is designed to minimize the time between a
+screen transition and the next valid click without continuously running
+expensive full-screen OCR.
+
+### Reduced OCR workload
+
+- Only the ARK client area is captured; the desktop, title bar, and window
+  borders are excluded.
+- State-specific OCR profiles expose only the small proportional regions where
+  useful text can appear, such as a popup title, the first server row, or an
+  action button. The rest of the image is masked before OCR.
+- The server browser does not parse the complete table. It checks only the
+  header, the first row, and the `JOIN` area because the target server is
+  assumed to be either first or absent.
+- Profiles are ordered according to the current state and the last action.
+  The most likely next screen is checked first, and recognition stops as soon
+  as the result contains the required evidence and button anchor.
+- Images wider than 1280 pixels are reduced before OCR, limiting the amount of
+  data processed on large windows. Very small windows are enlarged to at least
+  960 pixels wide to preserve text readability.
+- ARK renders horizontal UI text, so RapidOCR orientation classification is
+  disabled and each detection is processed only once.
+- OCR results below `ocr_min_confidence` are discarded immediately.
+- Language aliases are normalized once when `lang.json` is loaded. Each
+  captured OCR result is also normalized once before all screen comparisons.
+
+### Adaptive scanning and caching
+
+- Before invoking OCR, the application builds a grayscale `64x36` visual
+  signature from the currently relevant regions. If the signature has not
+  changed enough, the previous recognition result is reused.
+- `unchanged_ocr_refresh_seconds` periodically forces a fresh OCR pass even on
+  an apparently static screen, while `visual_change_threshold` controls how
+  much visual difference invalidates the cache.
+- Region masks are cached by profile and window size. The cache is bounded to
+  12 entries so repeated scans avoid rebuilding masks without accumulating
+  memory after many resizes.
+- Full-screen OCR is a recovery path, not the normal path. It runs at startup,
+  after a resize, when no state-specific profile is available, or after a
+  profile miss. Repeated fallback scans are limited by
+  `full_scan_fallback_seconds`.
+- A resize invalidates the visual cache immediately, preventing an obsolete
+  recognition from being reused with new coordinates.
+- After probable login success, scanning switches from
+  `active_poll_interval_seconds` to the slower
+  `success_passive_poll_seconds`, reducing CPU use and avoiding unnecessary
+  focus changes.
+
+### Fast and safe input
+
+- The active loop starts a new check every `active_poll_interval_seconds`
+  (`0.2` seconds by default), measured from the beginning of the previous
+  scan, so OCR time does not add another full polling delay.
+- OCR supplies the normalized center of the detected button directly to the
+  click routine. Proportional configured coordinates are used only when the
+  button label is unavailable.
+- Clicking uses short configurable hover and hold delays. The current defaults
+  are `0.05` seconds for each, with a `0.02`-second pointer restoration delay.
+- Debouncing applies only to repeated presses of the same action through
+  `same_action_retry_seconds`. A newly available different button can be
+  pressed immediately.
+- Immediately after a click, the expected OCR profiles are changed to match
+  the likely destination screen. This avoids waiting for a generic scan to
+  discover the transition.
+- Focus and client bounds are rechecked immediately before mouse-down. A stale
+  click is cancelled instead of wasting time in an incorrect state or at an
+  outdated position.
 
 ## Safety and diagnostics
 

@@ -99,7 +99,7 @@ class InputTimingTests(unittest.TestCase):
 
         first = bot.click(window, bounds, "join_server", "JOIN")
         repeated = bot.click(window, bounds, "join_server", "JOIN")
-        different = bot.click(window, bounds, "join_event", "JOIN evento")
+        different = bot.click(window, bounds, "join_event", "JOIN event")
         clock.advance(bot.config["same_action_retry_seconds"] + 0.01)
         retried = bot.click(window, bounds, "join_server", "JOIN")
 

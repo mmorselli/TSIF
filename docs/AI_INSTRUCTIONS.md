@@ -39,3 +39,5 @@ The login process has several steps illustrated by the screenshots in
   automatically.
 - Move the hardcoded server number and event-presence parameters into a
   configuration file.
+- Keep every button label and screen marker searched by OCR in `lang.json`, so
+  they can be replaced or extended for game languages other than English.

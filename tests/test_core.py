@@ -8,24 +8,47 @@ from arklogin import (
     ArkLoginBot,
     AttemptTracker,
     ClickResult,
+    DEFAULT_LANG_PATH,
     GameWindow,
     OCRDetection,
     Recognition,
     ScreenReader,
     canonical,
     load_config,
+    load_language,
     relative_click_point,
 )
 
 
+def make_reader(server_number="6448"):
+    reader = ScreenReader.__new__(ScreenReader)
+    reader.minimum_confidence = 0.45
+    reader.server_number = server_number
+    reader.set_language(load_language(DEFAULT_LANG_PATH))
+    return reader
+
+
 class TextRecognitionTests(unittest.TestCase):
     def setUp(self):
-        self.reader = ScreenReader.__new__(ScreenReader)
-        self.reader.minimum_confidence = 0.45
-        self.reader.server_number = "6448"
+        self.reader = make_reader()
 
     def test_canonical(self):
         self.assertEqual(canonical("EU-PVE-GenOne 6448"), "EUPVEGENONE6448")
+        self.assertEqual(canonical("Échec réseau"), "ÉCHECRÉSEAU")
+        self.assertEqual(canonical("E\u0301chec"), "ÉCHEC")
+
+    def test_custom_language_aliases(self):
+        language = dict(self.reader.language)
+        language["join_game"] = ("PLAY ONLINE",)
+        self.reader.set_language(language)
+
+        result = self.reader.classify_text(["PLAY ONLINE"])
+        anchors = self.reader.action_anchors(
+            (OCRDetection("PLAY ONLINE", 0.99, (0.2, 0.7)),)
+        )
+
+        self.assertEqual(result.state, "home")
+        self.assertEqual(anchors["join_game"], (0.2, 0.7))
 
     def test_home(self):
         result = self.reader.classify_text(["JOIN GAME", "CREATE OR RESUME GAME"])
@@ -120,8 +143,18 @@ class ConfigTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "digits only"):
                 load_config(path)
 
+    def test_missing_language_entries_are_rejected(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "lang.json"
+            path.write_text(json.dumps({"join": ["JOIN"]}), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Missing language entries"):
+                load_language(path)
+
 
 class CoordinateTests(unittest.TestCase):
+    def setUp(self):
+        self.reader = make_reader()
+
     def test_extra_client_height_does_not_move_bottom_buttons(self):
         reference = relative_click_point((210, 193, 1920, 1152), [0.895, 0.875])
         taller = relative_click_point((210, 193, 1920, 1200), [0.895, 0.875])
@@ -129,7 +162,7 @@ class CoordinateTests(unittest.TestCase):
         self.assertEqual(taller, (1928, 1201))
 
     def test_ocr_anchor_uses_exact_join_not_join_last_played(self):
-        anchors = ScreenReader.action_anchors(
+        anchors = self.reader.action_anchors(
             (
                 OCRDetection("JOIN LAST PLAYED", 0.99, (0.88, 0.80)),
                 OCRDetection("JOIN", 0.96, (0.25, 0.74)),
@@ -139,7 +172,7 @@ class CoordinateTests(unittest.TestCase):
         self.assertEqual(anchors["join_server"], (0.25, 0.74))
 
     def test_ocr_anchor_finds_joining_failed_ok(self):
-        anchors = ScreenReader.action_anchors(
+        anchors = self.reader.action_anchors(
             (OCRDetection("OK", 0.99, (0.5, 0.63)),)
         )
         self.assertEqual(anchors["dismiss_joining_failed"], (0.5, 0.63))

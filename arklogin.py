@@ -7,6 +7,7 @@ import logging
 import re
 import sys
 import time
+import unicodedata
 from dataclasses import dataclass, field
 from enum import Enum
 from logging.handlers import RotatingFileHandler
@@ -26,22 +27,86 @@ from rapidocr_onnxruntime import RapidOCR
 
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG_PATH = APP_DIR / "config.json"
+DEFAULT_LANG_PATH = APP_DIR / "lang.json"
 LOG_PATH = APP_DIR / "arklogin.log"
 REFERENCE_CLIENT_WIDTH = 1920
 REFERENCE_CLIENT_HEIGHT = 1152
 OCR_MIN_WIDTH = 960
 OCR_MAX_WIDTH = 1280
 MASK_CACHE_LIMIT = 12
+LANGUAGE_KEYS = frozenset(
+    {
+        "accept",
+        "back",
+        "cancel",
+        "connection_failed",
+        "event_markers",
+        "join",
+        "join_game",
+        "join_last_session",
+        "joining_failed",
+        "joining_server",
+        "network_failure",
+        "ok",
+        "press",
+        "server_browser",
+        "server_full",
+        "start",
+        "unknown_error",
+    }
+)
 
 
 def canonical(value: str) -> str:
     """Return OCR text in a form suitable for tolerant comparisons."""
-    return re.sub(r"[^A-Z0-9]+", "", value.upper())
+    normalized = unicodedata.normalize("NFKC", value).upper()
+    return "".join(character for character in normalized if character.isalnum())
 
 
-def contains_any(text: str, phrases: Iterable[str]) -> bool:
-    normalized = canonical(text)
-    return any(canonical(phrase) in normalized for phrase in phrases)
+def load_language(path: Path) -> dict[str, tuple[str, ...]]:
+    """Load and validate customizable OCR labels and screen markers."""
+    try:
+        with path.open("r", encoding="utf-8") as language_file:
+            raw = json.load(language_file)
+    except FileNotFoundError as exc:
+        raise ValueError(f"Language file not found: {path}") from exc
+    except json.JSONDecodeError as exc:
+        raise ValueError(
+            f"Invalid JSON in {path}, line {exc.lineno}: {exc.msg}"
+        ) from exc
+
+    if not isinstance(raw, dict):
+        raise ValueError(f"Language file must contain a JSON object: {path}")
+
+    missing = sorted(LANGUAGE_KEYS.difference(raw))
+    if missing:
+        raise ValueError(
+            f"Missing language entries in {path}: {', '.join(missing)}"
+        )
+
+    language: dict[str, tuple[str, ...]] = {}
+    for key in LANGUAGE_KEYS:
+        value = raw[key]
+        values = [value] if isinstance(value, str) else value
+        if (
+            not isinstance(values, list)
+            or not values
+            or not all(
+                isinstance(item, str) and canonical(item)
+                for item in values
+            )
+        ):
+            raise ValueError(
+                f"Language entry {key} must be a non-empty string or list "
+                f"of non-empty strings"
+            )
+        language[key] = tuple(values)
+    return language
+
+
+def language_path(config: dict[str, Any]) -> Path:
+    configured = Path(config["language_file"])
+    return configured if configured.is_absolute() else APP_DIR / configured
 
 
 def relative_click_point(
@@ -148,6 +213,13 @@ def load_config(path: Path) -> dict[str, Any]:
     config.setdefault("click_hover_seconds", 0.05)
     config.setdefault("click_hold_seconds", 0.05)
     config.setdefault("click_restore_delay_seconds", 0.02)
+    config.setdefault("language_file", "lang.json")
+
+    if (
+        not isinstance(config["language_file"], str)
+        or not config["language_file"].strip()
+    ):
+        raise ValueError("language_file must be a non-empty path")
 
     for key in (
         "active_poll_interval_seconds",
@@ -454,9 +526,15 @@ class WindowManager:
 
 
 class ScreenReader:
-    def __init__(self, minimum_confidence: float, server_number: str):
+    def __init__(
+        self,
+        minimum_confidence: float,
+        server_number: str,
+        language: dict[str, tuple[str, ...]] | None = None,
+    ):
         self.minimum_confidence = minimum_confidence
         self.server_number = canonical(server_number)
+        self.set_language(language or load_language(DEFAULT_LANG_PATH))
         # ARK renders horizontal text only. Skipping orientation classification
         # avoids processing every server-table cell a second time.
         self.ocr = RapidOCR(
@@ -465,6 +543,19 @@ class ScreenReader:
             det_limit_side_len=OCR_MAX_WIDTH,
         )
         self.mask_cache: dict[tuple[str, int, int], np.ndarray] = {}
+
+    def set_language(self, language: dict[str, tuple[str, ...]]) -> None:
+        self.language = language
+        self.language_tokens = {
+            key: tuple(canonical(phrase) for phrase in phrases)
+            for key, phrases in language.items()
+        }
+
+    def _equals_language(self, value: str, key: str) -> bool:
+        return value in self.language_tokens[key]
+
+    def _contains_language(self, value: str, key: str) -> bool:
+        return any(token in value for token in self.language_tokens[key])
 
     @staticmethod
     def _prepare(frame: np.ndarray) -> np.ndarray:
@@ -593,8 +684,8 @@ class ScreenReader:
         gray = cv2.cvtColor(prepared, cv2.COLOR_BGR2GRAY)
         return cv2.resize(gray, (64, 36), interpolation=cv2.INTER_AREA)
 
-    @staticmethod
     def action_anchors(
+        self,
         detections: Iterable[OCRDetection],
     ) -> dict[str, tuple[float, float]]:
         items = tuple(detections)
@@ -604,44 +695,54 @@ class ScreenReader:
 
         anchors: dict[str, tuple[float, float]] = {}
 
-        join_game = candidates(lambda value: value == "JOINGAME")
+        join_game = candidates(
+            lambda value: self._equals_language(value, "join_game")
+        )
         if join_game:
             anchors["join_game"] = max(
                 join_game, key=lambda item: item.confidence
             ).center
 
-        joins = candidates(lambda value: value == "JOIN")
+        joins = candidates(lambda value: self._equals_language(value, "join"))
         if joins:
             join = max(joins, key=lambda item: (item.center[1], item.confidence))
             anchors["join_server"] = join.center
             anchors["join_event"] = join.center
 
-        cancel = candidates(lambda value: value == "CANCEL")
+        cancel = candidates(
+            lambda value: self._equals_language(value, "cancel")
+        )
         if cancel:
             anchors["cancel"] = max(cancel, key=lambda item: item.confidence).center
 
         back = candidates(
-            lambda value: value.endswith("BACK") and len(value) <= len("BBACK")
+            lambda value: any(
+                value.endswith(token) and len(value) <= len(token) + 1
+                for token in self.language_tokens["back"]
+            )
         )
         if back:
             anchors["back"] = max(
                 back, key=lambda item: (item.center[1], item.confidence)
             ).center
 
-        accept = candidates(lambda value: value == "ACCEPT")
+        accept = candidates(
+            lambda value: self._equals_language(value, "accept")
+        )
         if accept:
             anchors["accept_network_failure"] = max(
                 accept, key=lambda item: item.confidence
             ).center
 
-        ok = candidates(lambda value: value == "OK")
+        ok = candidates(lambda value: self._equals_language(value, "ok"))
         if ok:
             anchors["dismiss_joining_failed"] = max(
                 ok, key=lambda item: item.confidence
             ).center
 
         start = candidates(
-            lambda value: "TOSTART" in value and "JOINLASTSESSION" not in value
+            lambda value: self._contains_language(value, "start")
+            and not self._contains_language(value, "join_last_session")
         )
         if start:
             anchors["start"] = max(start, key=lambda item: item.confidence).center
@@ -655,30 +756,28 @@ class ScreenReader:
         target_found = self._contains_server_number(compact)
 
         failed = (
-            contains_any(combined, ("CONNECTION FAILED",))
-            or contains_any(combined, ("SERVER IS FULL",))
-            and contains_any(combined, ("CANCEL",))
+            self._contains_language(compact, "connection_failed")
+            or self._contains_language(compact, "server_full")
+            and self._contains_language(compact, "cancel")
         )
-        event = contains_any(
-            combined, ("REQUIRED MODS", "MODS TO DOWNLOAD", "TOTAL MODS ON SERVER")
-        )
-        network_failure = contains_any(
-            combined, ("NETWORK FAILURE",)
-        ) and contains_any(combined, ("ACCEPT",))
-        joining_failed = contains_any(combined, ("JOINING FAILED",)) or (
-            contains_any(combined, ("UNKNOWN ERROR",))
-            and contains_any(combined, ("OK",))
+        event = self._contains_language(compact, "event_markers")
+        network_failure = self._contains_language(
+            compact, "network_failure"
+        ) and self._contains_language(compact, "accept")
+        joining_failed = self._contains_language(
+            compact, "joining_failed"
+        ) or (
+            self._contains_language(compact, "unknown_error")
+            and self._contains_language(compact, "ok")
         )
         start = (
-            contains_any(combined, ("JOIN LAST SESSION",))
-            and contains_any(combined, ("PRESS",))
-            and contains_any(combined, ("TO START",))
+            self._contains_language(compact, "join_last_session")
+            and self._contains_language(compact, "press")
+            and self._contains_language(compact, "start")
         )
-        home = contains_any(combined, ("JOIN GAME",))
-        server_browser = contains_any(
-            combined, ("MULTIPLAYER SERVERS", "SESSION NAME")
-        )
-        connecting = contains_any(combined, ("JOINING SERVER",))
+        home = self._contains_language(compact, "join_game")
+        server_browser = self._contains_language(compact, "server_browser")
+        connecting = self._contains_language(compact, "joining_server")
 
         if failed:
             state = "connection_failed"
@@ -861,7 +960,9 @@ class ArkLoginBot:
             config["window_title_contains"], config["process_name"], logger
         )
         self.screen_reader = ScreenReader(
-            float(config["ocr_min_confidence"]), config["server_number"]
+            float(config["ocr_min_confidence"]),
+            config["server_number"],
+            load_language(language_path(config)),
         )
         self.capture = mss.mss()
 
@@ -1506,7 +1607,9 @@ def check_reference_images(
         ),
     )
     reader = ScreenReader(
-        float(config["ocr_min_confidence"]), config["server_number"]
+        float(config["ocr_min_confidence"]),
+        config["server_number"],
+        load_language(language_path(config)),
     )
     failures = 0
     total_elapsed = 0.0
