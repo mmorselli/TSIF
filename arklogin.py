@@ -1319,6 +1319,7 @@ class ArkLoginBot:
             "connection_failed",
             "network_failure",
             "joining_failed",
+            "dlc_packs",
             "home",
             "start",
         }:
@@ -1344,7 +1345,13 @@ class ArkLoginBot:
             return False
         now = self.now()
 
-        if recognition.state in {"home", "start", "network_failure"}:
+        if recognition.state in {
+            "home",
+            "start",
+            "network_failure",
+            "joining_failed",
+            "dlc_packs",
+        }:
             self.back_recovery = None
             return False
 

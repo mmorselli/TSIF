@@ -8,6 +8,7 @@ from pathlib import Path
 from arklogin import (
     ArkLoginBot,
     AttemptTracker,
+    BackRecovery,
     ClickResult,
     GameWindow,
     OCRDetection,
@@ -240,7 +241,12 @@ class FlowTests(unittest.TestCase):
         bot.logger = logging.getLogger("arklogin.flow-test")
         bot.now = lambda: 0.0
         bot.attempt = AttemptTracker()
-        bot.back_recovery = None
+        bot.back_recovery = BackRecovery(
+            phase="wait_back_exit",
+            started_at=0.0,
+            cancel_sent_at=0.0,
+            back_sent_at=0.0,
+        )
         bot.last_state = None
         actions = []
         bot.perform_action = (
@@ -293,7 +299,12 @@ class FlowTests(unittest.TestCase):
         bot.logger = logging.getLogger("arklogin.dlc-flow-test")
         bot.now = lambda: 0.0
         bot.attempt = AttemptTracker()
-        bot.back_recovery = None
+        bot.back_recovery = BackRecovery(
+            phase="wait_back_exit",
+            started_at=0.0,
+            cancel_sent_at=0.0,
+            back_sent_at=0.0,
+        )
         bot.last_state = None
         actions = []
         bot.perform_action = (
