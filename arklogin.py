@@ -137,10 +137,15 @@ def set_dpi_awareness() -> None:
             ctypes.windll.user32.SetProcessDPIAware()
 
 
-def configure_logging(verbose: bool = False) -> logging.Logger:
+def configure_logging(
+    verbose: bool = False, file_enabled: bool = True
+) -> logging.Logger:
     logger = logging.getLogger("arklogin")
     logger.setLevel(logging.DEBUG)
-    logger.handlers.clear()
+    logger.propagate = False
+    for handler in logger.handlers[:]:
+        logger.removeHandler(handler)
+        handler.close()
 
     formatter = logging.Formatter(
         "%(asctime)s | %(levelname)s | %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
@@ -150,12 +155,13 @@ def configure_logging(verbose: bool = False) -> logging.Logger:
     console.setFormatter(formatter)
     logger.addHandler(console)
 
-    file_handler = RotatingFileHandler(
-        LOG_PATH, maxBytes=1_000_000, backupCount=2, encoding="utf-8"
-    )
-    file_handler.setLevel(logging.DEBUG)
-    file_handler.setFormatter(formatter)
-    logger.addHandler(file_handler)
+    if file_enabled:
+        file_handler = RotatingFileHandler(
+            LOG_PATH, maxBytes=1_000_000, backupCount=2, encoding="utf-8"
+        )
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(formatter)
+        logger.addHandler(file_handler)
     return logger
 
 
@@ -214,12 +220,15 @@ def load_config(path: Path) -> dict[str, Any]:
     config.setdefault("click_hold_seconds", 0.05)
     config.setdefault("click_restore_delay_seconds", 0.02)
     config.setdefault("language_file", "lang.json")
+    config.setdefault("log_file_enabled", True)
 
     if (
         not isinstance(config["language_file"], str)
         or not config["language_file"].strip()
     ):
         raise ValueError("language_file must be a non-empty path")
+    if not isinstance(config["log_file_enabled"], bool):
+        raise ValueError("log_file_enabled must be true or false")
 
     for key in (
         "active_poll_interval_seconds",
@@ -1688,9 +1697,14 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     set_dpi_awareness()
     args = parse_args()
-    logger = configure_logging(args.verbose)
+    # Configuration errors remain visible in the console without creating a
+    # log file before the user's preference has been loaded.
+    logger = configure_logging(args.verbose, file_enabled=False)
     try:
         config = load_config(args.config.resolve())
+        logger = configure_logging(
+            args.verbose, file_enabled=config["log_file_enabled"]
+        )
         if args.max_actions is not None and args.max_actions <= 0:
             raise ValueError("--max-actions must be greater than zero")
         if args.check_images:

@@ -41,3 +41,5 @@ The login process has several steps illustrated by the screenshots in
   configuration file.
 - Keep every button label and screen marker searched by OCR in `lang.json`, so
   they can be replaced or extended for game languages other than English.
+- Allow the rotating file log to be disabled from `config.json` without
+  suppressing console messages.
