@@ -70,6 +70,21 @@ class TextRecognitionTests(unittest.TestCase):
         )
         self.assertEqual(result.state, "network_failure")
 
+    def test_joining_failed(self):
+        result = self.reader.classify_text(
+            [
+                "MULTIPLAYER SERVERS: 0",
+                "JOINING FAILED",
+                "Unknown Error",
+                "OK",
+            ]
+        )
+        self.assertEqual(result.state, "joining_failed")
+        title_only = self.reader.classify_text(
+            ["MULTIPLAYER SERVERS: 0", "JOINING FAILED"]
+        )
+        self.assertEqual(title_only.state, "joining_failed")
+
     def test_event(self):
         result = self.reader.classify_text(
             ["EU-PVE-GENONE6448", "REQUIRED MODS", "JOIN"]
@@ -123,6 +138,12 @@ class CoordinateTests(unittest.TestCase):
         self.assertEqual(anchors["join_event"], (0.25, 0.74))
         self.assertEqual(anchors["join_server"], (0.25, 0.74))
 
+    def test_ocr_anchor_finds_joining_failed_ok(self):
+        anchors = ScreenReader.action_anchors(
+            (OCRDetection("OK", 0.99, (0.5, 0.63)),)
+        )
+        self.assertEqual(anchors["dismiss_joining_failed"], (0.5, 0.63))
+
 
 class FlowTests(unittest.TestCase):
     def test_server_full_returns_through_start_to_join_game(self):
@@ -148,6 +169,18 @@ class FlowTests(unittest.TestCase):
         window = GameWindow(hwnd=1, pid=1, title="Ark: Survival Ascended")
         bounds = (0, 0, 1920, 1152)
         states = (
+            Recognition(
+                "joining_failed",
+                "",
+                False,
+                ("JOINING FAILED", "Unknown Error", "OK"),
+            ),
+            Recognition(
+                "server_list",
+                "",
+                False,
+                ("MULTIPLAYER SERVERS: 0",),
+            ),
             Recognition("network_failure", "", False, ("NETWORK FAILURE", "ACCEPT")),
             Recognition("start", "", False, ("PRESS", "TO START")),
             Recognition("home", "", False, ("JOIN GAME",)),
@@ -157,7 +190,13 @@ class FlowTests(unittest.TestCase):
             bot.handle(state, window, bounds)
 
         self.assertEqual(
-            actions, ["accept_network_failure", "start", "join_game"]
+            actions,
+            [
+                "dismiss_joining_failed",
+                "accept_network_failure",
+                "start",
+                "join_game",
+            ],
         )
 
 

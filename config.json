@@ -26,6 +26,7 @@
     "join_event": [0.255, 0.905],
     "cancel": [0.563, 0.71],
     "back": [0.086, 0.83],
-    "accept_network_failure": [0.5, 0.71]
+    "accept_network_failure": [0.5, 0.71],
+    "dismiss_joining_failed": [0.5, 0.63]
   }
 }

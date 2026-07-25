@@ -15,6 +15,7 @@ from arklogin import (
     EVENT_PROFILE,
     GameWindow,
     HOME_PROFILE,
+    JOINING_FAILED_PROFILE,
     OCRDetection,
     OCRProfile,
     OUTCOME_PROFILE,
@@ -478,6 +479,31 @@ class OCRProfileTests(unittest.TestCase):
             SERVER_PROFILE,
         )
         self.assertEqual(result.state, "connection_failed")
+
+    def test_joining_failed_profile_requires_ok_anchor(self):
+        without_ok = Recognition(
+            "joining_failed",
+            "JOINING FAILED",
+            False,
+            ("JOINING FAILED",),
+        )
+        with_ok = Recognition(
+            "joining_failed",
+            "JOINING FAILED Unknown Error OK",
+            False,
+            ("JOINING FAILED", "Unknown Error", "OK"),
+            {"dismiss_joining_failed": (0.5, 0.63)},
+        )
+        self.assertFalse(
+            self.reader._profile_result_is_credible(
+                without_ok, JOINING_FAILED_PROFILE
+            )
+        )
+        self.assertTrue(
+            self.reader._profile_result_is_credible(
+                with_ok, JOINING_FAILED_PROFILE
+            )
+        )
 
     def test_incomplete_profile_does_not_suppress_full_fallback(self):
         incomplete = OCRProfile(

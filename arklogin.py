@@ -171,6 +171,13 @@ def load_config(path: Path) -> dict[str, Any]:
     if not 0 <= float(config["ocr_min_confidence"]) <= 1:
         raise ValueError("ocr_min_confidence must be between 0 and 1")
 
+    positions = config["click_positions"]
+    if not isinstance(positions, dict):
+        raise ValueError("click_positions must be an object")
+    # Keep configuration files from earlier releases compatible with the
+    # JOINING FAILED dialog introduced later.
+    positions.setdefault("dismiss_joining_failed", [0.5, 0.63])
+
     expected_positions = {
         "start",
         "join_game",
@@ -179,9 +186,9 @@ def load_config(path: Path) -> dict[str, Any]:
         "cancel",
         "back",
         "accept_network_failure",
+        "dismiss_joining_failed",
     }
-    positions = config["click_positions"]
-    if not isinstance(positions, dict) or not expected_positions.issubset(positions):
+    if not expected_positions.issubset(positions):
         raise ValueError(
             "click_positions must contain: "
             + ", ".join(sorted(expected_positions))
@@ -274,6 +281,7 @@ EVENT_HEADER = NormalizedRect(0.04, 0.12, 0.58, 0.29)
 POPUP_TITLE = NormalizedRect(0.40, 0.33, 0.60, 0.41)
 CONNECTING_TEXT = NormalizedRect(0.25, 0.38, 0.75, 0.59)
 HOME_JOIN = NormalizedRect(0.10, 0.61, 0.40, 0.79)
+JOINING_FAILED_ACTION = NormalizedRect(0.40, 0.58, 0.60, 0.68)
 POPUP_ACTIONS = NormalizedRect(0.39, 0.695, 0.61, 0.73)
 START_ACTIONS = NormalizedRect(0.32, 0.68, 0.68, 0.95)
 BACK_ACTION = NormalizedRect(0.02, 0.73, 0.20, 0.96)
@@ -326,6 +334,11 @@ BACK_PROFILE = OCRProfile(
         }
     ),
 )
+JOINING_FAILED_PROFILE = OCRProfile(
+    "joining_failed",
+    (POPUP_TITLE, JOINING_FAILED_ACTION),
+    frozenset({"joining_failed"}),
+)
 
 PROFILES_BY_STATE: dict[str, tuple[OCRProfile, ...]] = {
     "start": (START_PROFILE, HOME_PROFILE),
@@ -335,6 +348,7 @@ PROFILES_BY_STATE: dict[str, tuple[OCRProfile, ...]] = {
     "connecting": (OUTCOME_PROFILE,),
     "connection_failed": (BACK_PROFILE,),
     "network_failure": (START_PROFILE,),
+    "joining_failed": (JOINING_FAILED_PROFILE, SERVER_PROFILE),
     "unknown": (),
 }
 
@@ -346,6 +360,7 @@ PROFILES_BY_ACTION: dict[str, tuple[OCRProfile, ...]] = {
     "join_event": (OUTCOME_PROFILE, EVENT_PROFILE),
     "cancel": (BACK_PROFILE,),
     "back": (HOME_PROFILE, BACK_PROFILE),
+    "dismiss_joining_failed": (JOINING_FAILED_PROFILE, SERVER_PROFILE),
 }
 
 
@@ -619,6 +634,12 @@ class ScreenReader:
                 accept, key=lambda item: item.confidence
             ).center
 
+        ok = candidates(lambda value: value == "OK")
+        if ok:
+            anchors["dismiss_joining_failed"] = max(
+                ok, key=lambda item: item.confidence
+            ).center
+
         start = candidates(
             lambda value: "TOSTART" in value and "JOINLASTSESSION" not in value
         )
@@ -644,6 +665,10 @@ class ScreenReader:
         network_failure = contains_any(
             combined, ("NETWORK FAILURE",)
         ) and contains_any(combined, ("ACCEPT",))
+        joining_failed = contains_any(combined, ("JOINING FAILED",)) or (
+            contains_any(combined, ("UNKNOWN ERROR",))
+            and contains_any(combined, ("OK",))
+        )
         start = (
             contains_any(combined, ("JOIN LAST SESSION",))
             and contains_any(combined, ("PRESS",))
@@ -657,6 +682,8 @@ class ScreenReader:
 
         if failed:
             state = "connection_failed"
+        elif joining_failed:
+            state = "joining_failed"
         elif network_failure:
             state = "network_failure"
         elif event:
@@ -778,6 +805,7 @@ class ScreenReader:
             "event": "join_event",
             "connection_failed": "cancel",
             "network_failure": "accept_network_failure",
+            "joining_failed": "dismiss_joining_failed",
         }.get(result.state)
         if required_anchor is not None and required_anchor not in result.anchors:
             return False
@@ -1120,6 +1148,7 @@ class ArkLoginBot:
         if state in {
             "connection_failed",
             "network_failure",
+            "joining_failed",
             "home",
             "start",
         }:
@@ -1252,6 +1281,16 @@ class ArkLoginBot:
                 bounds,
                 "accept_network_failure",
                 "Network/server-full message: pressing ACCEPT.",
+            )
+            return
+
+        if recognition.state == "joining_failed":
+            self.perform_action(
+                recognition,
+                window,
+                bounds,
+                "dismiss_joining_failed",
+                "Joining failed with an unknown error: pressing OK.",
             )
             return
 

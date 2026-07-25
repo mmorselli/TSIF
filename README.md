@@ -61,6 +61,9 @@ The application:
 - when an advanced attempt ends with `NETWORK FAILURE / Server full`, presses
   `ACCEPT`, waits for the start screen, presses `PRESS TO START`, and resumes
   from `JOIN GAME`;
+- when `JOINING FAILED / Unknown Error` appears, presses `OK`, returns to the
+  server list, and waits without clicking until the configured server is back
+  in the first row;
 - verifies the server number in the first row through OCR before pressing
   `JOIN`;
 - does not press `BACK` during a normal attempt. It does so only after

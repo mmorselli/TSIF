@@ -29,6 +29,9 @@ The login process has several steps illustrated by the screenshots in
 - `05_cancel_after_connection_failed.png`: after pressing `CANCEL`, login
   remains blocked temporarily, so press `BACK`. This returns to the exact state
   shown in `01_first_screen.png`, allowing the loop to resume.
+- When `JOINING FAILED / Unknown Error` appears, press `OK`. The dialog closes
+  and returns to the server list. If the list is empty, wait until the target
+  server becomes available again.
 
 # REQUIREMENTS
 
