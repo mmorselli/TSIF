@@ -28,7 +28,7 @@ from rapidocr_onnxruntime import RapidOCR
 APP_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG_PATH = APP_DIR / "config.json"
 DEFAULT_LANG_PATH = APP_DIR / "lang.json"
-LOG_PATH = APP_DIR / "arklogin.log"
+LOG_PATH = APP_DIR / "tsif.log"
 REFERENCE_CLIENT_WIDTH = 1920
 REFERENCE_CLIENT_HEIGHT = 1152
 OCR_MIN_WIDTH = 960
@@ -141,7 +141,7 @@ def set_dpi_awareness() -> None:
 def configure_logging(
     verbose: bool = False, file_enabled: bool = True
 ) -> logging.Logger:
-    logger = logging.getLogger("arklogin")
+    logger = logging.getLogger("tsif")
     logger.setLevel(logging.DEBUG)
     logger.propagate = False
     for handler in logger.handlers[:]:
@@ -974,7 +974,7 @@ class ScreenReader:
         return True
 
 
-class ArkLoginBot:
+class TsifBot:
     def __init__(
         self,
         config: dict[str, Any],
@@ -1632,7 +1632,7 @@ class ArkLoginBot:
 
     def run(self) -> None:
         self.logger.info(
-            "ARK Login started for server %s. Press Ctrl+C to stop it.",
+            "TSIF started for server %s. Press Ctrl+C to stop it.",
             self.config["server_number"],
         )
         if self.dry_run:
@@ -1745,7 +1745,10 @@ def check_reference_images(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Automates login attempts to a full ARK: Survival Ascended server."
+        description=(
+            "TSIF automates login attempts to a full "
+            "ARK: Survival Ascended server."
+        )
     )
     parser.add_argument(
         "--config",
@@ -1793,7 +1796,7 @@ def main() -> int:
             raise ValueError("--max-actions must be greater than zero")
         if args.check_images:
             return check_reference_images(config, logger, APP_DIR / "docs")
-        bot = ArkLoginBot(config, logger, args.dry_run, args.max_actions)
+        bot = TsifBot(config, logger, args.dry_run, args.max_actions)
         bot.run()
         return 0
     except KeyboardInterrupt:

@@ -5,9 +5,9 @@ from unittest.mock import patch
 
 import numpy as np
 
-import arklogin
-from arklogin import (
-    ArkLoginBot,
+import tsif
+from tsif import (
+    TsifBot,
     AttemptTracker,
     BACK_PROFILE,
     BackRecovery,
@@ -64,9 +64,9 @@ class FakeWindowManager:
 
 def make_bot(clock=None):
     clock = clock or FakeClock()
-    bot = ArkLoginBot.__new__(ArkLoginBot)
+    bot = TsifBot.__new__(TsifBot)
     bot.config = load_config(ROOT / "config.json.example")
-    bot.logger = logging.getLogger(f"arklogin.test.{id(bot)}")
+    bot.logger = logging.getLogger(f"tsif.test.{id(bot)}")
     bot.logger.addHandler(logging.NullHandler())
     bot.dry_run = True
     bot.max_actions = None
@@ -115,7 +115,7 @@ class InputTimingTests(unittest.TestCase):
         bot = make_bot()
         bot.dry_run = False
         bot.window_manager.bounds = (10, 10, 1280, 720)
-        with patch("arklogin.win32gui.GetForegroundWindow", return_value=1):
+        with patch("tsif.win32gui.GetForegroundWindow", return_value=1):
             result = bot.click(
                 bot.window_manager.window,
                 (0, 0, 1920, 1152),
@@ -169,14 +169,14 @@ class InputTimingTests(unittest.TestCase):
         mouse_events = []
         cursor_positions = []
         with (
-            patch("arklogin.win32gui.GetForegroundWindow", return_value=1),
-            patch("arklogin.win32api.GetCursorPos", return_value=(12, 34)),
+            patch("tsif.win32gui.GetForegroundWindow", return_value=1),
+            patch("tsif.win32api.GetCursorPos", return_value=(12, 34)),
             patch(
-                "arklogin.win32api.SetCursorPos",
+                "tsif.win32api.SetCursorPos",
                 side_effect=lambda value: cursor_positions.append(value),
             ),
             patch(
-                "arklogin.win32api.mouse_event",
+                "tsif.win32api.mouse_event",
                 side_effect=lambda event, *_args: mouse_events.append(event),
             ),
         ):
@@ -190,7 +190,7 @@ class InputTimingTests(unittest.TestCase):
 
         self.assertEqual(
             mouse_events,
-            [arklogin.win32con.MOUSEEVENTF_LEFTDOWN, arklogin.win32con.MOUSEEVENTF_LEFTUP],
+            [tsif.win32con.MOUSEEVENTF_LEFTDOWN, tsif.win32con.MOUSEEVENTF_LEFTUP],
         )
         self.assertEqual(cursor_positions[-1], (12, 34))
 
@@ -202,14 +202,14 @@ class InputTimingTests(unittest.TestCase):
         target = (461, 795)
 
         with (
-            patch("arklogin.win32gui.GetForegroundWindow", return_value=1),
-            patch("arklogin.win32api.GetCursorPos", return_value=(12, 34)),
+            patch("tsif.win32gui.GetForegroundWindow", return_value=1),
+            patch("tsif.win32api.GetCursorPos", return_value=(12, 34)),
             patch(
-                "arklogin.win32api.SetCursorPos",
+                "tsif.win32api.SetCursorPos",
                 side_effect=lambda value: cursor_positions.append(value),
             ),
             patch(
-                "arklogin.win32api.mouse_event",
+                "tsif.win32api.mouse_event",
                 side_effect=lambda event, *_args: mouse_events.append(event),
             ),
         ):
@@ -226,8 +226,8 @@ class InputTimingTests(unittest.TestCase):
         self.assertEqual(
             mouse_events,
             [
-                arklogin.win32con.MOUSEEVENTF_LEFTDOWN,
-                arklogin.win32con.MOUSEEVENTF_LEFTUP,
+                tsif.win32con.MOUSEEVENTF_LEFTDOWN,
+                tsif.win32con.MOUSEEVENTF_LEFTUP,
             ],
         )
 
@@ -238,7 +238,7 @@ class SchedulerTests(unittest.TestCase):
         bot = make_bot(clock)
         bot.grab = lambda _window: None
 
-        with patch("arklogin.win32gui.GetForegroundWindow", return_value=0):
+        with patch("tsif.win32gui.GetForegroundWindow", return_value=0):
             bot.step()
             clock.advance(4.9)
             bot.step()
@@ -253,7 +253,7 @@ class SchedulerTests(unittest.TestCase):
         bot = make_bot(clock)
         bot.attempt.pause_until = 20.0
 
-        with patch("arklogin.win32gui.GetForegroundWindow", return_value=0):
+        with patch("tsif.win32gui.GetForegroundWindow", return_value=0):
             bot.step()
             clock.advance(9.9)
             bot.step()
@@ -443,7 +443,7 @@ class OCRProfileTests(unittest.TestCase):
     def test_mask_cache_is_bounded_during_resize(self):
         for width in range(900, 930):
             self.reader._profile_mask(HOME_PROFILE, width, 600)
-        self.assertLessEqual(len(self.reader.mask_cache), arklogin.MASK_CACHE_LIMIT)
+        self.assertLessEqual(len(self.reader.mask_cache), tsif.MASK_CACHE_LIMIT)
 
     def test_profiles_recognize_reference_states_and_anchors(self):
         cases = (
@@ -535,10 +535,10 @@ class OCRProfileTests(unittest.TestCase):
         for filename, profile, expected_state, anchor, target in cases:
             frame = reference_frame(ROOT / "docs" / filename)
             height = round(frame.shape[0] * 800 / frame.shape[1])
-            resized = arklogin.cv2.resize(
+            resized = tsif.cv2.resize(
                 frame,
                 (800, height),
-                interpolation=arklogin.cv2.INTER_AREA,
+                interpolation=tsif.cv2.INTER_AREA,
             )
             with self.subTest(filename=filename, width=800):
                 result = self.reader.recognize(resized, profile)
@@ -581,7 +581,7 @@ class OCRProfileTests(unittest.TestCase):
     def test_incomplete_profile_does_not_suppress_full_fallback(self):
         incomplete = OCRProfile(
             "incomplete_server",
-            (arklogin.SERVER_HEADER, arklogin.SERVER_JOIN),
+            (tsif.SERVER_HEADER, tsif.SERVER_JOIN),
             frozenset({"server_list"}),
         )
         result, matched, attempts = self.reader.recognize_chain(
@@ -597,7 +597,7 @@ class OCRProfileTests(unittest.TestCase):
     def test_back_profile_requires_back_anchor_while_connecting(self):
         incomplete = OCRProfile(
             "back",
-            (arklogin.SERVER_HEADER, arklogin.CONNECTING_TEXT),
+            (tsif.SERVER_HEADER, tsif.CONNECTING_TEXT),
             frozenset({"connecting"}),
         )
         result, matched, attempts = self.reader.recognize_chain(

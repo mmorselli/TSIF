@@ -5,8 +5,8 @@ import unittest
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
-from arklogin import (
-    ArkLoginBot,
+from tsif import (
+    TsifBot,
     AttemptTracker,
     BackRecovery,
     ClickResult,
@@ -232,13 +232,13 @@ class CoordinateTests(unittest.TestCase):
 
 class FlowTests(unittest.TestCase):
     def test_server_full_returns_through_start_to_join_game(self):
-        bot = ArkLoginBot.__new__(ArkLoginBot)
+        bot = TsifBot.__new__(TsifBot)
         bot.config = {
             "server_number": "6448",
             "event_screen_enabled": True,
             "post_cancel_wait_seconds": 2,
         }
-        bot.logger = logging.getLogger("arklogin.flow-test")
+        bot.logger = logging.getLogger("tsif.flow-test")
         bot.now = lambda: 0.0
         bot.attempt = AttemptTracker()
         bot.back_recovery = BackRecovery(
@@ -290,13 +290,13 @@ class FlowTests(unittest.TestCase):
         )
 
     def test_dlc_screen_returns_to_home(self):
-        bot = ArkLoginBot.__new__(ArkLoginBot)
+        bot = TsifBot.__new__(TsifBot)
         bot.config = {
             "server_number": "6448",
             "event_screen_enabled": True,
             "post_cancel_wait_seconds": 2,
         }
-        bot.logger = logging.getLogger("arklogin.dlc-flow-test")
+        bot.logger = logging.getLogger("tsif.dlc-flow-test")
         bot.now = lambda: 0.0
         bot.attempt = AttemptTracker()
         bot.back_recovery = BackRecovery(

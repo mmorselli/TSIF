@@ -1,7 +1,7 @@
 # GOAL
 
-Write a Python application that automatically clicks buttons in a game window
-to make the login process easier.
+Maintain **TSIF (The Server Is Full)**, a Python application that automatically
+clicks buttons in a game window to make the login process easier.
 
 # CONTEXT
 
@@ -15,7 +15,7 @@ which must be ignored.
 The main game process is named `ArkAscended`.
 
 The login process has several steps illustrated by the screenshots in
-`D:\dati\prg\arklogin\docs\`:
+the `docs/` directory:
 
 - `01_first_screen.png`: click `JOIN GAME` on the first card.
 - `02_join-server.png`: the server list appears. Press `JOIN` in the
@@ -117,6 +117,6 @@ When a new screen or dialog is introduced:
 3. Define the evidence required to trust its regional OCR result.
 4. Add a reference screenshot or synthetic fixture and tests for recognition,
    button anchoring, and at least one resized window.
-5. Run the complete unit-test suite and `arklogin.py --check-images`. Compare
+5. Run the complete unit-test suite and `tsif.py --check-images`. Compare
    OCR timings and verify that existing screens still use regional profiles
    instead of unnecessary full-screen fallbacks.
