@@ -1,0 +1,20 @@
+{
+  "server_number": "6468",
+  "event_screen_enabled": true,
+  "window_title_contains": "Ark: Survival Ascended",
+  "process_name": "ArkAscended",
+  "poll_interval_seconds": 5.0,
+  "action_cooldown_seconds": 3.0,
+  "post_cancel_wait_seconds": 2.0,
+  "ocr_min_confidence": 0.45,
+  "restore_mouse_position": true,
+  "click_positions": {
+    "start": [0.5, 0.8],
+    "join_game": [0.28, 0.7],
+    "join_server": [0.895, 0.875],
+    "join_event": [0.255, 0.905],
+    "cancel": [0.563, 0.71],
+    "back": [0.086, 0.83],
+    "accept_network_failure": [0.5, 0.71]
+  }
+}
