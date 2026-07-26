@@ -5,26 +5,26 @@ interacting exclusively with the `ArkAscended` process window.
 
 ## Running
 
-1. Run or double-click `setup_tsif.bat` once. It creates the local
-   configuration files, prepares the `venv`, installs the required libraries,
-   and starts the application. If 64-bit Python 3.14 is unavailable, setup asks
-   for one confirmation and then downloads and installs it automatically for
-   the current Windows user.
-2. Open `config.json` and check `server_number` and
+1. Run or double-click `tsif.bat` in the main TSIF directory. On first use it
+   detects the incomplete environment and automatically runs the setup stored
+   inside `app`.
+2. Open `app\config\config.json` and check `server_number` and
    `event_screen_enabled`. The target server must be in the first list row. If
    it is not there, the application treats it as unavailable and does not
    click.
 3. Start ARK in windowed mode and navigate to any screen described in the
    specifications.
-4. Run or double-click `tsif.bat`. This launcher always uses the Python
-   interpreter from `venv`.
+4. Run or double-click `tsif.bat` whenever you want to start TSIF. The launcher
+   verifies the environment before every start and repairs it through setup
+   when required.
 5. To stop the application, press `Ctrl+C` in its console window or close it.
 
-During setup, `config.json` is copied from `config.json.example` and
-`lang.json` from `lang.json.example` only when the destination file does not
-already exist. Running setup again updates dependencies but never overwrites
-either local file. If an older virtual environment is present, setup recreates
-it with 64-bit Python 3.14 before installing the pinned dependencies.
+During setup, `app\config\config.json` is copied from its `.example` file and
+`app\config\lang.json` from its corresponding example only when the destination
+does not already exist. Running setup again updates dependencies but never
+overwrites either local file. If an older virtual environment is present,
+setup recreates it with 64-bit Python 3.14 before installing the pinned
+dependencies.
 
 Automatic Python installation requires an internet connection. Setup uses the
 official Python Install Manager through WinGet on Windows 10/11, with the
@@ -34,8 +34,8 @@ versions untouched.
 
 ## Configuration
 
-`config.json` and `lang.json` contain user-specific settings and are excluded
-from Git. Their version-controlled `.example` files provide defaults for new
+The files in `app\config` contain user-specific settings and are excluded from
+Git. Their version-controlled `.example` files provide defaults for new
 installations. After updating the application, compare existing local files
 with the corresponding examples and manually add any newly introduced entries.
 
@@ -44,11 +44,10 @@ with the corresponding examples and manually add any newly introduced entries.
 - `event_screen_enabled`: when `true`, confirms the optional event/mod screen.
   When `false`, recognizes it without clicking.
 - `language_file`: path to the JSON file containing every button label and
-  screen marker used by OCR. Relative paths are resolved from the application
-  directory.
+  screen marker used by OCR. Relative paths are resolved from `app\config`.
 - `log_file_enabled`: when `true`, writes diagnostic messages to the rotating
-  `tsif.log` file. Set it to `false` to disable file logging while keeping
-  console messages available.
+  `app\logs\tsif.log` file. Set it to `false` to disable file logging while
+  keeping console messages available.
 - `active_poll_interval_seconds`: interval between checks while ARK is in the
   foreground. The `0.2`-second default keeps attempts responsive.
 - `foreground_reacquire_interval_seconds`: waits 5 seconds before bringing ARK
@@ -79,11 +78,11 @@ are used only as fallbacks when the button text cannot be located.
 
 ## Language customization
 
-All text searched on the game screen is defined in `lang.json`. Each entry is
-a list of accepted OCR aliases. To support another game language, edit the
-local file and translate every value while preserving the keys. Alternatively,
-copy `lang.json.example` to another filename, translate it, and set
-`language_file` in `config.json` to that filename.
+All text searched on the game screen is defined in `app\config\lang.json`. Each
+entry is a list of accepted OCR aliases. To support another game language, edit
+the local file and translate every value while preserving the keys.
+Alternatively, put another JSON file below `app\config` and set
+`language_file` in `app\config\config.json` to its relative filename.
 
 Multiple aliases can be retained when a label has alternative translations or
 OCR frequently returns a predictable variant:
@@ -95,9 +94,9 @@ OCR frequently returns a predictable variant:
 ```
 
 The actual language file must contain all entries found in
-`lang.json.example`; startup stops with a clear error if an entry is missing
-or empty. Files are read as UTF-8, and matching supports Unicode letters and
-digits.
+`app\config\lang.json.example`; startup stops with a clear error if an entry is
+missing or empty. Files are read as UTF-8, and matching supports Unicode
+letters and digits.
 
 ## Performance optimizations
 
@@ -129,7 +128,7 @@ expensive full-screen OCR.
   ONNX Runtime CPU engine. Dependencies are pinned to Python 3.14-compatible
   releases so installations remain reproducible.
 - OCR results below `ocr_min_confidence` are discarded immediately.
-- Language aliases are normalized once when `lang.json` is loaded. Each
+- Language aliases are normalized once when the language JSON is loaded. Each
   captured OCR result is also normalized once before all screen comparisons.
 
 ### Adaptive scanning and caching
@@ -195,17 +194,17 @@ The application:
   detecting `CONNECTION FAILED` and pressing `CANCEL` once;
 - after `connecting`, pauses clicks and avoids reclaiming focus for the
   configured duration when the login UI disappears consistently;
-- writes diagnostic details to `tsif.log` when `log_file_enabled` is
+- writes diagnostic details to `app\logs\tsif.log` when `log_file_enabled` is
   enabled.
 
 To observe the application without sending clicks:
 
 ```powershell
-.\venv\Scripts\python.exe .\tsif.py --dry-run --verbose
+.\tsif.bat --dry-run --verbose
 ```
 
 To check and benchmark optimized OCR profiles against all screenshots:
 
 ```powershell
-.\venv\Scripts\python.exe .\tsif.py --check-images --verbose
+.\tsif.bat --check-images --verbose
 ```

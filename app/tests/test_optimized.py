@@ -31,7 +31,7 @@ from tsif import (
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TEST_LANGUAGE = load_language(ROOT / "lang.json.example")
+TEST_LANGUAGE = load_language(ROOT / "config" / "lang.json.example")
 
 
 class FakeClock:
@@ -65,7 +65,7 @@ class FakeWindowManager:
 def make_bot(clock=None):
     clock = clock or FakeClock()
     bot = TsifBot.__new__(TsifBot)
-    bot.config = load_config(ROOT / "config.json.example")
+    bot.config = load_config(ROOT / "config" / "config.json.example")
     bot.logger = logging.getLogger(f"tsif.test.{id(bot)}")
     bot.logger.addHandler(logging.NullHandler())
     bot.dry_run = True

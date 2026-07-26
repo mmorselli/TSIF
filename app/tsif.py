@@ -26,9 +26,11 @@ from rapidocr import RapidOCR
 
 
 APP_DIR = Path(__file__).resolve().parent
-DEFAULT_CONFIG_PATH = APP_DIR / "config.json"
-DEFAULT_LANG_PATH = APP_DIR / "lang.json"
-LOG_PATH = APP_DIR / "tsif.log"
+CONFIG_DIR = APP_DIR / "config"
+LOG_DIR = APP_DIR / "logs"
+DEFAULT_CONFIG_PATH = CONFIG_DIR / "config.json"
+DEFAULT_LANG_PATH = CONFIG_DIR / "lang.json"
+LOG_PATH = LOG_DIR / "tsif.log"
 REFERENCE_CLIENT_WIDTH = 1920
 REFERENCE_CLIENT_HEIGHT = 1152
 OCR_MIN_WIDTH = 960
@@ -107,7 +109,7 @@ def load_language(path: Path) -> dict[str, tuple[str, ...]]:
 
 def language_path(config: dict[str, Any]) -> Path:
     configured = Path(config["language_file"])
-    return configured if configured.is_absolute() else APP_DIR / configured
+    return configured if configured.is_absolute() else CONFIG_DIR / configured
 
 
 def relative_click_point(
@@ -157,6 +159,7 @@ def configure_logging(
     logger.addHandler(console)
 
     if file_enabled:
+        LOG_DIR.mkdir(parents=True, exist_ok=True)
         file_handler = RotatingFileHandler(
             LOG_PATH, maxBytes=1_000_000, backupCount=2, encoding="utf-8"
         )

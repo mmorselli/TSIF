@@ -29,7 +29,7 @@ def make_reader(server_number="6448"):
     reader = ScreenReader.__new__(ScreenReader)
     reader.minimum_confidence = 0.45
     reader.server_number = server_number
-    reader.set_language(load_language(ROOT / "lang.json.example"))
+    reader.set_language(load_language(ROOT / "config" / "lang.json.example"))
     return reader
 
 
@@ -161,7 +161,7 @@ class ConfigTests(unittest.TestCase):
 
     def test_log_file_enabled_is_optional_and_must_be_boolean(self):
         config = json.loads(
-            (ROOT / "config.json.example").read_text(encoding="utf-8")
+            (ROOT / "config" / "config.json.example").read_text(encoding="utf-8")
         )
         config.pop("log_file_enabled")
         with tempfile.TemporaryDirectory() as directory:

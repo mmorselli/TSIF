@@ -1,7 +1,0 @@
-__pycache__/
-*.py[cod]
-tsif.log*
-live_before.png
-venv/
-/config.json
-/lang.json

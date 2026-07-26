@@ -51,10 +51,11 @@ the `docs/` directory:
   do not reintroduce the discontinued `rapidocr-onnxruntime` distribution.
 - Move the hardcoded server number and event-presence parameters into a
   configuration file.
-- Keep every button label and screen marker searched by OCR in `lang.json`, so
-  they can be replaced or extended for game languages other than English.
-- Allow the rotating file log to be disabled from `config.json` without
-  suppressing console messages.
+- Keep every button label and screen marker searched by OCR in
+  `app/config/lang.json`, so they can be replaced or extended for game
+  languages other than English.
+- Allow the rotating file log in `app/logs` to be disabled from
+  `app/config/config.json` without suppressing console messages.
 
 # PERFORMANCE REQUIREMENTS
 
