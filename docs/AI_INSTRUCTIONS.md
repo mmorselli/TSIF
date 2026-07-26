@@ -40,6 +40,10 @@ the `docs/` directory:
 
 - Write the requested application and install all required libraries
   automatically.
+- Target 64-bit Python 3.14. The setup script must reject or recreate virtual
+  environments made with a different Python minor version.
+- Use the maintained unified `rapidocr` package with the ONNX Runtime engine;
+  do not reintroduce the discontinued `rapidocr-onnxruntime` distribution.
 - Move the hardcoded server number and event-presence parameters into a
   configuration file.
 - Keep every button label and screen marker searched by OCR in `lang.json`, so

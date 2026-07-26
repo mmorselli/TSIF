@@ -211,6 +211,13 @@ class CoordinateTests(unittest.TestCase):
         self.assertEqual(anchors["join_event"], (0.25, 0.74))
         self.assertEqual(anchors["join_server"], (0.25, 0.74))
 
+    def test_ocr_anchor_accepts_controller_glyph_prefix(self):
+        anchors = self.reader.action_anchors(
+            (OCRDetection("X JOIN", 0.99, (0.25, 0.74)),)
+        )
+        self.assertEqual(anchors["join_event"], (0.25, 0.74))
+        self.assertEqual(anchors["join_server"], (0.25, 0.74))
+
     def test_ocr_anchor_finds_joining_failed_ok(self):
         anchors = self.reader.action_anchors(
             (OCRDetection("OK", 0.99, (0.5, 0.63)),)

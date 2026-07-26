@@ -22,7 +22,7 @@ import win32api
 import win32con
 import win32gui
 import win32process
-from rapidocr_onnxruntime import RapidOCR
+from rapidocr import RapidOCR
 
 
 APP_DIR = Path(__file__).resolve().parent
@@ -572,11 +572,16 @@ class ScreenReader:
         self.server_number = canonical(server_number)
         self.set_language(language or load_language(DEFAULT_LANG_PATH))
         # ARK renders horizontal text only. Skipping orientation classification
-        # avoids processing every server-table cell a second time.
+        # avoids processing every server-table cell a second time. RapidOCR 3
+        # receives initialization overrides through its hierarchical config.
         self.ocr = RapidOCR(
-            use_cls=False,
-            det_limit_type="max",
-            det_limit_side_len=OCR_MAX_WIDTH,
+            params={
+                "Global.text_score": minimum_confidence,
+                "Global.use_cls": False,
+                "Global.log_level": "error",
+                "Det.limit_type": "max",
+                "Det.limit_side_len": OCR_MAX_WIDTH,
+            }
         )
         self.mask_cache: dict[tuple[str, int, int], np.ndarray] = {}
 
@@ -587,11 +592,15 @@ class ScreenReader:
             for key, phrases in language.items()
         }
 
-    def _equals_language(self, value: str, key: str) -> bool:
-        return value in self.language_tokens[key]
-
     def _contains_language(self, value: str, key: str) -> bool:
         return any(token in value for token in self.language_tokens[key])
+
+    def _matches_button(self, value: str, key: str) -> bool:
+        """Allow one OCR glyph before a button label, such as controller X."""
+        return any(
+            value.endswith(token) and len(value) <= len(token) + 1
+            for token in self.language_tokens[key]
+        )
 
     @staticmethod
     def _prepare(frame: np.ndarray) -> np.ndarray:
@@ -625,23 +634,33 @@ class ScreenReader:
             return cached
 
         mask = np.zeros((height, width), dtype=np.uint8)
-        ui_height = self._ui_height(width, height)
-        padding = 0.015
         for zone in profile.zones:
-            left = max(0.0, zone.left - padding)
-            top = max(0.0, zone.top - padding)
-            right = min(1.0, zone.right + padding)
-            bottom = min(1.0, zone.bottom + padding)
-            x1 = max(0, min(width, round(left * width)))
-            x2 = max(0, min(width, round(right * width)))
-            y1 = max(0, min(height, round(top * ui_height)))
-            y2 = max(0, min(height, round(bottom * ui_height)))
+            x1, y1, x2, y2 = self._zone_bounds(zone, width, height)
             if x2 > x1 and y2 > y1:
                 mask[y1:y2, x1:x2] = 255
         while len(self.mask_cache) >= MASK_CACHE_LIMIT:
             self.mask_cache.pop(next(iter(self.mask_cache)))
         self.mask_cache[key] = mask
         return mask
+
+    def _zone_bounds(
+        self,
+        zone: NormalizedRect,
+        width: int,
+        height: int,
+    ) -> tuple[int, int, int, int]:
+        ui_height = self._ui_height(width, height)
+        padding = 0.015
+        left = max(0.0, zone.left - padding)
+        top = max(0.0, zone.top - padding)
+        right = min(1.0, zone.right + padding)
+        bottom = min(1.0, zone.bottom + padding)
+        return (
+            max(0, min(width, round(left * width))),
+            max(0, min(height, round(top * ui_height))),
+            max(0, min(width, round(right * width))),
+            max(0, min(height, round(bottom * ui_height))),
+        )
 
     def prepare(
         self, frame: np.ndarray, profile: OCRProfile | None = None
@@ -657,19 +676,20 @@ class ScreenReader:
         self, prepared: np.ndarray
     ) -> tuple[OCRDetection, ...]:
         height, width = prepared.shape[:2]
-        result, _ = self.ocr(prepared, use_cls=False)
-        if not result:
+        result = self.ocr(prepared, use_cls=False)
+        boxes = getattr(result, "boxes", None)
+        texts = getattr(result, "txts", None)
+        scores = getattr(result, "scores", None)
+        if boxes is None or texts is None or scores is None:
             return ()
 
         detections: list[OCRDetection] = []
-        for item in result:
-            if len(item) < 3:
-                continue
-            value = str(item[1]).strip()
-            confidence = float(item[2])
+        for box_value, text_value, score_value in zip(boxes, texts, scores):
+            value = str(text_value).strip()
+            confidence = float(score_value)
             if not value or confidence < self.minimum_confidence:
                 continue
-            box = np.asarray(item[0], dtype=np.float64)
+            box = np.asarray(box_value, dtype=np.float64)
             if box.ndim != 2 or box.shape[1] < 2:
                 continue
             center_x = float(np.mean(box[:, 0])) / width
@@ -686,10 +706,41 @@ class ScreenReader:
             )
         return tuple(detections)
 
+    def _read_zone_detections(
+        self,
+        prepared: np.ndarray,
+        zone: NormalizedRect,
+    ) -> tuple[OCRDetection, ...]:
+        height, width = prepared.shape[:2]
+        x1, y1, x2, y2 = self._zone_bounds(zone, width, height)
+        if x2 <= x1 or y2 <= y1:
+            return ()
+        local = self._read_prepared_detections(prepared[y1:y2, x1:x2])
+        crop_width = x2 - x1
+        crop_height = y2 - y1
+        return tuple(
+            OCRDetection(
+                text=item.text,
+                confidence=item.confidence,
+                center=(
+                    (x1 + item.center[0] * crop_width) / width,
+                    (y1 + item.center[1] * crop_height) / height,
+                ),
+            )
+            for item in local
+        )
+
     def read_detections(
         self, frame: np.ndarray, profile: OCRProfile | None = None
     ) -> tuple[OCRDetection, ...]:
-        return self._read_prepared_detections(self.prepare(frame, profile))
+        prepared = self._prepare(frame)
+        if profile is None:
+            return self._read_prepared_detections(prepared)
+        return tuple(
+            item
+            for zone in profile.zones
+            for item in self._read_zone_detections(prepared, zone)
+        )
 
     def read_lines(
         self, frame: np.ndarray, profile: OCRProfile | None = None
@@ -734,7 +785,7 @@ class ScreenReader:
         join_game = [
             item
             for item in candidates(
-                lambda value: self._equals_language(value, "join_game")
+                lambda value: self._matches_button(value, "join_game")
             )
             if point_in_rect(item.center, HOME_JOIN)
         ]
@@ -743,23 +794,20 @@ class ScreenReader:
                 join_game, key=lambda item: item.confidence
             ).center
 
-        joins = candidates(lambda value: self._equals_language(value, "join"))
+        joins = candidates(lambda value: self._matches_button(value, "join"))
         if joins:
             join = max(joins, key=lambda item: (item.center[1], item.confidence))
             anchors["join_server"] = join.center
             anchors["join_event"] = join.center
 
         cancel = candidates(
-            lambda value: self._equals_language(value, "cancel")
+            lambda value: self._matches_button(value, "cancel")
         )
         if cancel:
             anchors["cancel"] = max(cancel, key=lambda item: item.confidence).center
 
         back = candidates(
-            lambda value: any(
-                value.endswith(token) and len(value) <= len(token) + 1
-                for token in self.language_tokens["back"]
-            )
+            lambda value: self._matches_button(value, "back")
         )
         if back:
             anchors["back"] = max(
@@ -774,14 +822,14 @@ class ScreenReader:
             ).center
 
         accept = candidates(
-            lambda value: self._equals_language(value, "accept")
+            lambda value: self._matches_button(value, "accept")
         )
         if accept:
             anchors["accept_network_failure"] = max(
                 accept, key=lambda item: item.confidence
             ).center
 
-        ok = candidates(lambda value: self._equals_language(value, "ok"))
+        ok = candidates(lambda value: self._matches_button(value, "ok"))
         if ok:
             anchors["dismiss_joining_failed"] = max(
                 ok, key=lambda item: item.confidence
@@ -891,8 +939,11 @@ class ScreenReader:
             and SERVER_SELECTED.top <= y <= SERVER_SELECTED.bottom
         )
 
-    def _recognize_prepared(self, prepared: np.ndarray) -> Recognition:
-        detections = self._read_prepared_detections(prepared)
+    def _recognition_from_detections(
+        self,
+        prepared: np.ndarray,
+        detections: Sequence[OCRDetection],
+    ) -> Recognition:
         result = self.classify_text(item.text for item in detections)
         target_found = result.target_server_found
         first_row_observed = False
@@ -912,10 +963,34 @@ class ScreenReader:
             first_server_row_observed=first_row_observed,
         )
 
+    def _recognize_prepared(self, prepared: np.ndarray) -> Recognition:
+        detections = self._read_prepared_detections(prepared)
+        return self._recognition_from_detections(prepared, detections)
+
+    def _recognize_profile(
+        self,
+        prepared: np.ndarray,
+        profile: OCRProfile,
+    ) -> Recognition:
+        detections: list[OCRDetection] = []
+        result = Recognition("unknown", "", False, ())
+        for zone in profile.zones:
+            detections.extend(self._read_zone_detections(prepared, zone))
+            result = self._recognition_from_detections(prepared, detections)
+            if (
+                result.state in profile.allowed_states
+                and self._profile_result_is_credible(result, profile)
+            ):
+                break
+        return result
+
     def recognize(
         self, frame: np.ndarray, profile: OCRProfile | None = None
     ) -> Recognition:
-        return self._recognize_prepared(self.prepare(frame, profile))
+        prepared = self._prepare(frame)
+        if profile is not None:
+            return self._recognize_profile(prepared, profile)
+        return self._recognize_prepared(prepared)
 
     def recognize_chain(
         self,
@@ -924,12 +999,9 @@ class ScreenReader:
         include_full_fallback: bool,
     ) -> tuple[Recognition, OCRProfile | None, int]:
         prepared = self._prepare(frame)
-        height, width = prepared.shape[:2]
         attempts = 0
         for profile in profiles:
-            mask = self._profile_mask(profile, width, height)
-            masked = cv2.bitwise_and(prepared, prepared, mask=mask)
-            result = self._recognize_prepared(masked)
+            result = self._recognize_profile(prepared, profile)
             attempts += 1
             if (
                 result.state in profile.allowed_states

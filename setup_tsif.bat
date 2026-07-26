@@ -1,6 +1,8 @@
 @echo off
 setlocal
 cd /d "%~dp0"
+set "TSIF_PYTHON_VERSION=3.14"
+set "TSIF_FALLBACK_PYTHON=%LocalAppData%\Programs\Python\Python314\python.exe"
 
 if not exist "config.json" (
     if not exist "config.json.example" (
@@ -22,14 +24,45 @@ if not exist "lang.json" (
     if errorlevel 1 goto :error
 )
 
+if exist "venv\Scripts\python.exe" (
+    "venv\Scripts\python.exe" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 14) else 1)" >nul 2>&1
+    if errorlevel 1 (
+        echo Recreating the virtual environment with Python %TSIF_PYTHON_VERSION%...
+        rmdir /S /Q "venv"
+        if exist "venv" (
+            echo ERROR: the old venv is in use. Close TSIF and Python tools, then retry.
+            goto :error
+        )
+    )
+)
+
 if not exist "venv\Scripts\python.exe" (
-    echo Creating the Python virtual environment...
-    py -3 -m venv venv
+    echo Creating the Python %TSIF_PYTHON_VERSION% virtual environment...
+    py -%TSIF_PYTHON_VERSION% -c "import sys" >nul 2>&1
+    if not errorlevel 1 (
+        py -%TSIF_PYTHON_VERSION% -m venv venv
+    ) else if exist "%TSIF_FALLBACK_PYTHON%" (
+        "%TSIF_FALLBACK_PYTHON%" -m venv venv
+    ) else (
+        echo ERROR: Python %TSIF_PYTHON_VERSION% was not found.
+        echo Install the 64-bit release from https://www.python.org/downloads/
+        goto :error
+    )
     if errorlevel 1 goto :error
 )
 
+"venv\Scripts\python.exe" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 14) else 1)" >nul 2>&1
+if errorlevel 1 (
+    echo ERROR: the virtual environment does not use Python %TSIF_PYTHON_VERSION%.
+    goto :error
+)
+
 echo Checking required dependencies...
+"venv\Scripts\python.exe" -m pip install --disable-pip-version-check --upgrade pip
+if errorlevel 1 goto :error
 "venv\Scripts\python.exe" -m pip install --disable-pip-version-check -r requirements.txt
+if errorlevel 1 goto :error
+"venv\Scripts\python.exe" -m pip check
 if errorlevel 1 goto :error
 
 echo.

@@ -1,7 +1,7 @@
-mss==10.1.0
-numpy==2.2.6
+mss==10.2.0
+numpy==2.5.1
 onnxruntime==1.28.0
-opencv-python==4.12.0.88
-psutil==7.0.0
-pywin32==311
-rapidocr-onnxruntime==1.4.4
+opencv-python==5.0.0.93
+psutil==7.2.2
+pywin32==312
+rapidocr==3.9.2

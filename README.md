@@ -5,23 +5,26 @@ interacting exclusively with the `ArkAscended` process window.
 
 ## Running
 
-1. Run or double-click `setup_tsif.bat` once. It creates the local
+1. Install the 64-bit release of **Python 3.14** from
+   [python.org](https://www.python.org/downloads/).
+2. Run or double-click `setup_tsif.bat` once. It creates the local
    configuration files, prepares the `venv`, installs the required libraries,
    and starts the application.
-2. Open `config.json` and check `server_number` and
+3. Open `config.json` and check `server_number` and
    `event_screen_enabled`. The target server must be in the first list row. If
    it is not there, the application treats it as unavailable and does not
    click.
-3. Start ARK in windowed mode and navigate to any screen described in the
+4. Start ARK in windowed mode and navigate to any screen described in the
    specifications.
-4. Run or double-click `tsif.bat`. This launcher always uses the Python
+5. Run or double-click `tsif.bat`. This launcher always uses the Python
    interpreter from `venv`.
-5. To stop the application, press `Ctrl+C` in its console window or close it.
+6. To stop the application, press `Ctrl+C` in its console window or close it.
 
 During setup, `config.json` is copied from `config.json.example` and
 `lang.json` from `lang.json.example` only when the destination file does not
 already exist. Running setup again updates dependencies but never overwrites
-either local file.
+either local file. If an older virtual environment is present, setup recreates
+it with Python 3.14 before installing the pinned dependencies.
 
 ## Configuration
 
@@ -102,18 +105,23 @@ expensive full-screen OCR.
   borders are excluded.
 - State-specific OCR profiles expose only the small proportional regions where
   useful text can appear, such as a popup title, the first server row, or an
-  action button. The rest of the image is masked before OCR.
+  action button. Each region is cropped before OCR, so the rest of the image is
+  never sent to the recognition engine.
 - The server browser does not parse the complete table. It checks only the
   header, the first row, and the `JOIN` area because the target server is
   assumed to be either first or absent.
 - Profiles are ordered according to the current state and the last action.
-  The most likely next screen is checked first, and recognition stops as soon
-  as the result contains the required evidence and button anchor.
+  The most likely next screen and region are checked first, and recognition
+  stops as soon as the result contains the required evidence and button
+  anchor.
 - Images wider than 1280 pixels are reduced before OCR, limiting the amount of
   data processed on large windows. Very small windows are enlarged to at least
   960 pixels wide to preserve text readability.
 - ARK renders horizontal UI text, so RapidOCR orientation classification is
   disabled and each detection is processed only once.
+- TSIF uses the actively maintained unified `rapidocr` package with the
+  ONNX Runtime CPU engine. Dependencies are pinned to Python 3.14-compatible
+  releases so installations remain reproducible.
 - OCR results below `ocr_min_confidence` are discarded immediately.
 - Language aliases are normalized once when `lang.json` is loaded. Each
   captured OCR result is also normalized once before all screen comparisons.
