@@ -5,26 +5,32 @@ interacting exclusively with the `ArkAscended` process window.
 
 ## Running
 
-1. Install the 64-bit release of **Python 3.14** from
-   [python.org](https://www.python.org/downloads/).
-2. Run or double-click `setup_tsif.bat` once. It creates the local
+1. Run or double-click `setup_tsif.bat` once. It creates the local
    configuration files, prepares the `venv`, installs the required libraries,
-   and starts the application.
-3. Open `config.json` and check `server_number` and
+   and starts the application. If 64-bit Python 3.14 is unavailable, setup asks
+   for one confirmation and then downloads and installs it automatically for
+   the current Windows user.
+2. Open `config.json` and check `server_number` and
    `event_screen_enabled`. The target server must be in the first list row. If
    it is not there, the application treats it as unavailable and does not
    click.
-4. Start ARK in windowed mode and navigate to any screen described in the
+3. Start ARK in windowed mode and navigate to any screen described in the
    specifications.
-5. Run or double-click `tsif.bat`. This launcher always uses the Python
+4. Run or double-click `tsif.bat`. This launcher always uses the Python
    interpreter from `venv`.
-6. To stop the application, press `Ctrl+C` in its console window or close it.
+5. To stop the application, press `Ctrl+C` in its console window or close it.
 
 During setup, `config.json` is copied from `config.json.example` and
 `lang.json` from `lang.json.example` only when the destination file does not
 already exist. Running setup again updates dependencies but never overwrites
 either local file. If an older virtual environment is present, setup recreates
-it with Python 3.14 before installing the pinned dependencies.
+it with 64-bit Python 3.14 before installing the pinned dependencies.
+
+Automatic Python installation requires an internet connection. Setup uses the
+official Python Install Manager through WinGet on Windows 10/11, with the
+official python.org App Installer package as a fallback. Installation is
+per-user, normally requires no administrator approval, and leaves other Python
+versions untouched.
 
 ## Configuration
 
@@ -155,7 +161,8 @@ expensive full-screen OCR.
   scan, so OCR time does not add another full polling delay.
 - OCR supplies the normalized center of the detected button directly to the
   click routine. Proportional configured coordinates are used only when the
-  button label is unavailable.
+  button label is unavailable, except for `JOIN GAME`: its exact OCR anchor is
+  required because DLC cards can move it to a different horizontal position.
 - Clicking uses short configurable hover and hold delays. The current defaults
   are `0.05` seconds for each, with a `0.02`-second pointer restoration delay.
 - Debouncing applies only to repeated presses of the same action through

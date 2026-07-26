@@ -224,11 +224,33 @@ class CoordinateTests(unittest.TestCase):
         )
         self.assertEqual(anchors["dismiss_joining_failed"], (0.5, 0.63))
 
-    def test_join_game_anchor_outside_card_is_rejected(self):
+    def test_join_game_anchor_can_move_horizontally_with_dlc_cards(self):
+        anchors = self.reader.action_anchors(
+            (OCRDetection("JOIN GAME", 0.99, (0.78, 0.70)),)
+        )
+        self.assertEqual(anchors["join_game"], (0.78, 0.70))
+
+    def test_join_game_anchor_outside_card_label_band_is_rejected(self):
         anchors = self.reader.action_anchors(
             (OCRDetection("JOIN GAME", 0.99, (0.25, 0.86)),)
         )
         self.assertNotIn("join_game", anchors)
+
+    def test_join_game_anchor_zone_accounts_for_extra_client_height(self):
+        valid_y = 0.70 * 1152 / 1400
+        invalid_y = 0.86 * 1152 / 1400
+        valid = self.reader.action_anchors(
+            (OCRDetection("JOIN GAME", 0.99, (0.50, valid_y)),),
+            width=1920,
+            height=1400,
+        )
+        invalid = self.reader.action_anchors(
+            (OCRDetection("JOIN GAME", 0.99, (0.50, invalid_y)),),
+            width=1920,
+            height=1400,
+        )
+        self.assertIn("join_game", valid)
+        self.assertNotIn("join_game", invalid)
 
     def test_ocr_anchor_finds_dlc_back(self):
         anchors = self.reader.action_anchors(

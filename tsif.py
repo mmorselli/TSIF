@@ -332,6 +332,23 @@ def point_in_rect(
     )
 
 
+def point_in_ui_rect(
+    point: tuple[float, float],
+    rectangle: NormalizedRect,
+    width: int,
+    height: int,
+) -> bool:
+    """Test a frame-normalized point against a UI-normalized rectangle."""
+    ui_height = min(
+        height,
+        round(width * REFERENCE_CLIENT_HEIGHT / REFERENCE_CLIENT_WIDTH),
+    )
+    return point_in_rect(
+        (point[0], point[1] * height / max(1, ui_height)),
+        rectangle,
+    )
+
+
 @dataclass(frozen=True)
 class OCRProfile:
     name: str
@@ -367,6 +384,7 @@ class ClickResult(str, Enum):
     DEBOUNCED = "debounced"
     FOCUS_LOST = "focus_lost"
     STALE = "stale"
+    ANCHOR_MISSING = "anchor_missing"
 
 
 SERVER_HEADER = NormalizedRect(0.035, 0.12, 0.30, 0.22)
@@ -374,7 +392,10 @@ SERVER_SELECTED = NormalizedRect(0.035, 0.285, 0.40, 0.375)
 EVENT_HEADER = NormalizedRect(0.04, 0.12, 0.58, 0.29)
 POPUP_TITLE = NormalizedRect(0.40, 0.33, 0.60, 0.41)
 CONNECTING_TEXT = NormalizedRect(0.25, 0.38, 0.75, 0.59)
-HOME_JOIN = NormalizedRect(0.10, 0.61, 0.40, 0.79)
+# DLC cards may be inserted before the three permanent home cards. Search the
+# complete label band so JOIN GAME is located by its text instead of by its
+# card index.
+HOME_CARD_LABELS = NormalizedRect(0.0, 0.54, 1.0, 0.81)
 DLC_HEADER = NormalizedRect(0.38, 0.16, 0.62, 0.29)
 DLC_BACK = NormalizedRect(0.40, 0.82, 0.60, 0.94)
 JOINING_FAILED_ACTION = NormalizedRect(0.40, 0.58, 0.60, 0.68)
@@ -392,7 +413,7 @@ START_PROFILE = OCRProfile(
 )
 HOME_PROFILE = OCRProfile(
     "home",
-    MODAL_GUARD + (HOME_JOIN,),
+    MODAL_GUARD + (HOME_CARD_LABELS,),
     frozenset({"home", "network_failure", "connection_failed"}),
 )
 DLC_PROFILE = OCRProfile(
@@ -467,9 +488,10 @@ PROFILES_BY_ACTION: dict[str, tuple[OCRProfile, ...]] = {
 }
 
 DETECTED_ANCHOR_ZONES = {
-    "join_game": HOME_JOIN,
+    "join_game": HOME_CARD_LABELS,
     "back_dlc": DLC_BACK,
 }
+OCR_REQUIRED_ACTIONS = frozenset({"join_game"})
 
 
 class WindowManager:
@@ -774,11 +796,18 @@ class ScreenReader:
     def action_anchors(
         self,
         detections: Iterable[OCRDetection],
+        width: int | None = None,
+        height: int | None = None,
     ) -> dict[str, tuple[float, float]]:
         items = tuple(detections)
 
         def candidates(predicate: Any) -> list[OCRDetection]:
             return [item for item in items if predicate(canonical(item.text))]
+
+        def in_zone(item: OCRDetection, zone: NormalizedRect) -> bool:
+            if width is None or height is None:
+                return point_in_rect(item.center, zone)
+            return point_in_ui_rect(item.center, zone, width, height)
 
         anchors: dict[str, tuple[float, float]] = {}
 
@@ -787,7 +816,7 @@ class ScreenReader:
             for item in candidates(
                 lambda value: self._matches_button(value, "join_game")
             )
-            if point_in_rect(item.center, HOME_JOIN)
+            if in_zone(item, HOME_CARD_LABELS)
         ]
         if join_game:
             anchors["join_game"] = max(
@@ -814,7 +843,7 @@ class ScreenReader:
                 back, key=lambda item: (item.center[1], item.confidence)
             ).center
         dlc_back = [
-            item for item in back if point_in_rect(item.center, DLC_BACK)
+            item for item in back if in_zone(item, DLC_BACK)
         ]
         if dlc_back:
             anchors["back_dlc"] = max(
@@ -944,11 +973,11 @@ class ScreenReader:
         prepared: np.ndarray,
         detections: Sequence[OCRDetection],
     ) -> Recognition:
+        height, width = prepared.shape[:2]
         result = self.classify_text(item.text for item in detections)
         target_found = result.target_server_found
         first_row_observed = False
         if result.state == "server_list":
-            height, width = prepared.shape[:2]
             first_row_observed = any(
                 self._detection_is_in_first_server_row(item, width, height)
                 for item in detections
@@ -959,7 +988,7 @@ class ScreenReader:
             text=result.text,
             target_server_found=target_found,
             lines=result.lines,
-            anchors=self.action_anchors(detections),
+            anchors=self.action_anchors(detections, width, height),
             first_server_row_observed=first_row_observed,
         )
 
@@ -1154,7 +1183,12 @@ class TsifBot:
         if (
             detected_position is not None
             and safe_zone is not None
-            and not point_in_rect(detected_position, safe_zone)
+            and not point_in_ui_rect(
+                detected_position,
+                safe_zone,
+                width,
+                height,
+            )
         ):
             self.logger.warning(
                 "OCR anchor for %s is outside its safe region: "
@@ -1162,6 +1196,15 @@ class TsifBot:
                 position_name,
             )
             detected_position = None
+        if (
+            position_name in OCR_REQUIRED_ACTIONS
+            and detected_position is None
+        ):
+            self.logger.warning(
+                "Click %s not sent: its exact OCR anchor is required.",
+                position_name,
+            )
+            return ClickResult.ANCHOR_MISSING
         if detected_position is not None:
             x = left + round(width * detected_position[0])
             y = top + round(height * detected_position[1])
@@ -1734,6 +1777,7 @@ def check_reference_images(
     expected = (
         ("00_start_screen.png", "start", START_PROFILE, "start", False),
         ("01_first_screen.png", "home", HOME_PROFILE, "join_game", False),
+        ("01_first_screen_alt.png", "home", HOME_PROFILE, "join_game", False),
         (
             "02_join-server.png",
             "server_list",

@@ -17,7 +17,9 @@ The main game process is named `ArkAscended`.
 The login process has several steps illustrated by the screenshots in
 the `docs/` directory:
 
-- `01_first_screen.png`: click `JOIN GAME` on the first card.
+- `01_first_screen.png` and `01_first_screen_alt.png`: locate the card by its
+  `JOIN GAME` label and click that OCR anchor. DLC cards can be inserted before
+  it, so its index and horizontal position are not fixed.
 - `02_join-server.png`: the server list appears. Press `JOIN` in the
   bottom-right corner because the last attempted server is preselected. The
   server number should be configurable; it is `6448` in this example and is
@@ -28,7 +30,7 @@ the `docs/` directory:
   `CONNECTION FAILED` screen appears. Press `CANCEL`.
 - `05_cancel_after_connection_failed.png`: after pressing `CANCEL`, login
   remains blocked temporarily, so press `BACK`. This returns to the exact state
-  shown in `01_first_screen.png`, allowing the loop to resume.
+  shown in the `01_first_screen*.png` examples, allowing the loop to resume.
 - When `JOINING FAILED / Unknown Error` appears, press `OK`. The dialog closes
   and returns to the server list. If the list is empty, wait until the target
   server becomes available again.
@@ -42,6 +44,9 @@ the `docs/` directory:
   automatically.
 - Target 64-bit Python 3.14. The setup script must reject or recreate virtual
   environments made with a different Python minor version.
+- If that runtime is unavailable, setup must offer a per-user automatic
+  installation through the official Python Install Manager without removing
+  other installed Python versions.
 - Use the maintained unified `rapidocr` package with the ONNX Runtime engine;
   do not reintroduce the discontinued `rapidocr-onnxruntime` distribution.
 - Move the hardcoded server number and event-presence parameters into a

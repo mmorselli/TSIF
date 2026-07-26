@@ -8,9 +8,9 @@ if not exist "venv\Scripts\python.exe" (
     exit /b 1
 )
 
-"venv\Scripts\python.exe" -c "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 14) else 1)"
+"venv\Scripts\python.exe" -c "import struct, sys; raise SystemExit(0 if sys.version_info[:2] == (3, 14) and struct.calcsize('P') * 8 == 64 else 1)"
 if errorlevel 1 (
-    echo ERROR: the virtual environment does not use Python 3.14.
+    echo ERROR: the virtual environment does not use 64-bit Python 3.14.
     echo Run setup_tsif.bat to recreate it.
     exit /b 1
 )

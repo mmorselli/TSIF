@@ -231,6 +231,19 @@ class InputTimingTests(unittest.TestCase):
             ],
         )
 
+    def test_join_game_is_not_clicked_without_exact_ocr_anchor(self):
+        bot = make_bot()
+
+        result = bot.click(
+            bot.window_manager.window,
+            bot.window_manager.bounds,
+            "join_game",
+            "JOIN GAME",
+        )
+
+        self.assertIs(result, ClickResult.ANCHOR_MISSING)
+        self.assertEqual(bot.actions, 0)
+
 
 class SchedulerTests(unittest.TestCase):
     def test_focus_is_not_reacquired_before_five_seconds(self):
@@ -450,6 +463,13 @@ class OCRProfileTests(unittest.TestCase):
             ("00_start_screen.png", START_PROFILE, "start", "start", False),
             ("01_first_screen.png", HOME_PROFILE, "home", "join_game", False),
             (
+                "01_first_screen_alt.png",
+                HOME_PROFILE,
+                "home",
+                "join_game",
+                False,
+            ),
+            (
                 "02_join-server.png",
                 SERVER_PROFILE,
                 "server_list",
@@ -505,6 +525,13 @@ class OCRProfileTests(unittest.TestCase):
         cases = (
             (
                 "01_first_screen.png",
+                HOME_PROFILE,
+                "home",
+                "join_game",
+                False,
+            ),
+            (
+                "01_first_screen_alt.png",
                 HOME_PROFILE,
                 "home",
                 "join_game",
