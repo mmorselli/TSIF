@@ -56,9 +56,9 @@ if errorlevel 1 (
 )
 
 echo Checking required dependencies...
-"venv\Scripts\python.exe" -m pip install --disable-pip-version-check --upgrade pip
+"venv\Scripts\python.exe" -m pip install --disable-pip-version-check --no-cache-dir --upgrade pip
 if errorlevel 1 goto :error
-"venv\Scripts\python.exe" -m pip install --disable-pip-version-check -r requirements.txt
+"venv\Scripts\python.exe" -m pip install --disable-pip-version-check --no-cache-dir -r requirements.txt
 if errorlevel 1 goto :error
 "venv\Scripts\python.exe" -m pip check
 if errorlevel 1 goto :error
