@@ -1119,7 +1119,7 @@ class TsifBot:
             config["server_number"],
             load_language(language_path(config)),
         )
-        self.capture = mss.mss()
+        self.capture = mss.MSS()
 
     def notice(self, key: str, message: str, interval: float = 10.0) -> None:
         now = self.now()
