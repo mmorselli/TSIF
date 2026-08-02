@@ -5,6 +5,8 @@
   "log_file_enabled": false,
   "window_title_contains": "Ark: Survival Ascended",
   "process_name": "ArkAscended",
+  "auto_start_ark": false,
+  "steam_executable_path": "C:\\Program Files (x86)\\Steam\\steam.exe",
   "active_poll_interval_seconds": 0.2,
   "foreground_reacquire_interval_seconds": 5.0,
   "same_action_retry_seconds": 0.75,

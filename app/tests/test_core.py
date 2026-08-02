@@ -4,6 +4,7 @@ import tempfile
 import unittest
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
+from unittest.mock import MagicMock, patch
 
 from tsif import (
     TsifBot,
@@ -175,6 +176,51 @@ class ConfigTests(unittest.TestCase):
                 ValueError, "log_file_enabled must be true or false"
             ):
                 load_config(path)
+
+    def test_automatic_ark_start_is_disabled_by_default(self):
+        config = json.loads(
+            (ROOT / "config" / "config.json.example").read_text(encoding="utf-8")
+        )
+        config.pop("auto_start_ark")
+        config.pop("steam_executable_path")
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps(config), encoding="utf-8")
+            loaded = load_config(path)
+
+        self.assertFalse(loaded["auto_start_ark"])
+        self.assertEqual(loaded["steam_executable_path"], "")
+
+    def test_automatic_ark_start_requires_an_existing_executable(self):
+        config = json.loads(
+            (ROOT / "config" / "config.json.example").read_text(encoding="utf-8")
+        )
+        config["auto_start_ark"] = True
+        config["steam_executable_path"] = "missing.exe"
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "config.json"
+            path.write_text(json.dumps(config), encoding="utf-8")
+            with self.assertRaisesRegex(ValueError, "Steam executable not found"):
+                load_config(path)
+
+    def test_automatic_ark_start_launches_only_when_process_is_missing(self):
+        bot = TsifBot.__new__(TsifBot)
+        bot.config = {
+            "auto_start_ark": True,
+            "steam_executable_path": str(ROOT / "steam.exe"),
+        }
+        bot.logger = logging.getLogger("tsif.autostart-test")
+        bot.window_manager = MagicMock()
+        bot.window_manager.is_process_running.return_value = False
+        bot.last_ark_launch_attempt = None
+
+        with patch("tsif.subprocess.Popen") as popen:
+            bot.ensure_ark_running(10.0)
+            bot.ensure_ark_running(11.0)
+
+        popen.assert_called_once_with(
+            [str(ROOT / "steam.exe"), "-applaunch", "2399830"], cwd=str(ROOT)
+        )
 
     def test_file_logging_can_be_disabled(self):
         logger = configure_logging(file_enabled=False)

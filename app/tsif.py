@@ -5,6 +5,7 @@ import ctypes
 import json
 import logging
 import re
+import subprocess
 import sys
 import time
 import unicodedata
@@ -36,6 +37,8 @@ REFERENCE_CLIENT_HEIGHT = 1152
 OCR_MIN_WIDTH = 960
 OCR_MAX_WIDTH = 1280
 MASK_CACHE_LIMIT = 12
+ARK_LAUNCH_RETRY_SECONDS = 30.0
+ARK_STEAM_APP_ID = "2399830"
 LANGUAGE_KEYS = frozenset(
     {
         "accept",
@@ -225,6 +228,8 @@ def load_config(path: Path) -> dict[str, Any]:
     config.setdefault("click_restore_delay_seconds", 0.02)
     config.setdefault("language_file", "lang.json")
     config.setdefault("log_file_enabled", True)
+    config.setdefault("auto_start_ark", False)
+    config.setdefault("steam_executable_path", "")
 
     if (
         not isinstance(config["language_file"], str)
@@ -233,6 +238,23 @@ def load_config(path: Path) -> dict[str, Any]:
         raise ValueError("language_file must be a non-empty path")
     if not isinstance(config["log_file_enabled"], bool):
         raise ValueError("log_file_enabled must be true or false")
+    if not isinstance(config["auto_start_ark"], bool):
+        raise ValueError("auto_start_ark must be true or false")
+    if not isinstance(config["steam_executable_path"], str):
+        raise ValueError("steam_executable_path must be a path")
+    if config["auto_start_ark"]:
+        configured_executable = config["steam_executable_path"].strip()
+        if not configured_executable:
+            raise ValueError(
+                "steam_executable_path must be set when auto_start_ark is true"
+            )
+        executable_path = Path(configured_executable).expanduser()
+        if not executable_path.is_absolute():
+            executable_path = path.parent / executable_path
+        executable_path = executable_path.resolve()
+        if not executable_path.is_file():
+            raise ValueError(f"Steam executable not found: {executable_path}")
+        config["steam_executable_path"] = str(executable_path)
 
     for key in (
         "active_poll_interval_seconds",
@@ -537,6 +559,16 @@ class WindowManager:
         win32gui.EnumWindows(visit, None)
         self.cached_window = candidates[0] if candidates else None
         return self.cached_window
+
+    def is_process_running(self) -> bool:
+        for process in psutil.process_iter(["name"]):
+            try:
+                name = (process.info["name"] or "").casefold().removesuffix(".exe")
+                if name == self.process_name:
+                    return True
+            except (psutil.AccessDenied, psutil.NoSuchProcess):
+                continue
+        return False
 
     @staticmethod
     def client_bounds(window: GameWindow) -> tuple[int, int, int, int] | None:
@@ -1110,6 +1142,7 @@ class TsifBot:
         self.next_scan_at = 0.0
         self.background_since: float | None = None
         self.next_focus_attempt_at: float | None = None
+        self.last_ark_launch_attempt: float | None = None
         self.attempt = AttemptTracker()
         self.window_manager = WindowManager(
             config["window_title_contains"], config["process_name"], logger
@@ -1127,6 +1160,29 @@ class TsifBot:
         if key != last_key or now - last_time >= interval:
             self.logger.info(message)
             self.last_notice = (key, now)
+
+    def ensure_ark_running(self, now: float) -> None:
+        if not bool(self.config["auto_start_ark"]):
+            return
+        if self.window_manager.is_process_running():
+            self.last_ark_launch_attempt = None
+            return
+        if (
+            self.last_ark_launch_attempt is not None
+            and now - self.last_ark_launch_attempt < ARK_LAUNCH_RETRY_SECONDS
+        ):
+            return
+
+        executable = Path(self.config["steam_executable_path"])
+        self.logger.info("ARK is not running: starting it through Steam.")
+        try:
+            subprocess.Popen(
+                [str(executable), "-applaunch", ARK_STEAM_APP_ID],
+                cwd=str(executable.parent),
+            )
+        except OSError as exc:
+            raise OSError(f"Unable to start ARK through {executable}: {exc}") from exc
+        self.last_ark_launch_attempt = now
 
     def grab(self, window: GameWindow) -> tuple[np.ndarray, tuple[int, int, int, int]] | None:
         bounds = self.window_manager.client_bounds(window)
@@ -1671,6 +1727,7 @@ class TsifBot:
         now = self.now()
         window = self.window_manager.find()
         if window is None:
+            self.ensure_ark_running(now)
             self.notice(
                 "window_missing",
                 "Waiting for the ARK: Survival Ascended window...",
