@@ -1,4 +1,4 @@
-# TSIF (The Server Is Full) V1.0
+# TSIF (The Server Is Full) V1.1.2
 
 **TSIF** automates login attempts to a full **ARK: Survival Ascended** server while
 interacting exclusively with the `ArkAscended` process window.
