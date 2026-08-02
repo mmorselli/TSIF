@@ -13,7 +13,7 @@ interacting exclusively with the `ArkAscended` process window.
    it is not there, the application treats it as unavailable and does not
    click.
 3. Start ARK in windowed mode and navigate to any screen described in the
-   specifications.
+   specifications. Alternatively, enable `auto_start_ark` as described below.
 4. Run or double-click `tsif.bat` whenever you want to start TSIF. The launcher
    verifies the environment before every start and repairs it through setup
    when required.
@@ -48,6 +48,12 @@ with the corresponding examples and manually add any newly introduced entries.
 - `log_file_enabled`: when `true`, writes diagnostic messages to the rotating
   `app\logs\tsif.log` file. Set it to `false` to disable file logging while
   keeping console messages available.
+- `auto_start_ark`: when `true`, starts ARK through Steam if its process is not
+  already running. This preserves the language and launch options configured in
+  Steam. The default is `false`.
+- `steam_executable_path`: path to `steam.exe` used by automatic startup. The
+  example contains the usual Steam installation path; update it if Steam is
+  installed elsewhere.
 - `active_poll_interval_seconds`: interval between checks while ARK is in the
   foreground. The `0.2`-second default keeps attempts responsive.
 - `foreground_reacquire_interval_seconds`: waits 5 seconds before bringing ARK
